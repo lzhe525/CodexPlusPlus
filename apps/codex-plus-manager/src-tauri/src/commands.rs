@@ -70,7 +70,9 @@ pub struct EnterpriseLoginRequest {
 #[tauri::command]
 pub async fn enterprise_restore() -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot>
 {
-    enterprise_snapshot_result(codex_plus_core::enterprise::restore().await)
+    enterprise_snapshot_result(
+        codex_plus_core::enterprise::restore(&enterprise_credential_helper_path()).await,
+    )
 }
 
 #[tauri::command]

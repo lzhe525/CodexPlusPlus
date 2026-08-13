@@ -50,7 +50,7 @@ Production uses the single configured Launcher API origin `https://api.ai.rydf-d
 - Passwords exist only in the login request and React component state; they are cleared after each attempt and are never persisted.
 - The upstream Sub2API JWT remains inside the Launcher API service. The client stores only opaque Launcher access/refresh tokens.
 - On Windows, session, refresh, and inference credentials are stored as Generic Credentials in Windows Credential Manager; macOS uses Keychain and Linux uses Secret Service (`secret-tool`). They are not stored in `settings.json`, provider JSON, LocalStorage, logs, or `auth.json`.
-- `config.toml` contains a managed `company-ai` provider with an `auth.command` reference to the Codex++ manager executable. Codex obtains the inference credential on demand through `--enterprise-credential get`.
+- `config.toml` contains a managed `company-ai` provider that points to the Codex++ loopback proxy. The proxy reads the inference credential from the OS credential store and adds the upstream Bearer header; the credential is never written to `config.toml`, `auth.json`, or application settings.
 - Logout clears the opaque session, refresh token, inference credential, user cache, and the managed config block. Community profiles are preserved.
 - Diagnostics return booleans and sanitized messages only. Passwords, authorization headers, JWTs, and full keys are excluded.
 - The client is a UX and local-secret boundary. Model permission, quota, concurrency, rate limits, account routing, and credential validity remain server-side Sub2API/Launcher policy.

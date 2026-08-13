@@ -519,6 +519,15 @@ pub async fn open_responses_proxy_request_for_path(
     original_user_agent: Option<&str>,
     request_path: &str,
 ) -> anyhow::Result<UpstreamProxyResponse> {
+    if let Some(relay) = crate::enterprise::enterprise_proxy_profile()? {
+        return open_enterprise_responses_proxy_request(
+            body,
+            original_user_agent,
+            request_path,
+            relay,
+        )
+        .await;
+    }
     let settings = SettingsStore::default().load().unwrap_or_default();
     open_responses_proxy_request_with_settings_and_user_agent(
         body,
@@ -527,6 +536,50 @@ pub async fn open_responses_proxy_request_for_path(
         request_path,
     )
     .await
+}
+
+async fn open_enterprise_responses_proxy_request(
+    body: &str,
+    original_user_agent: Option<&str>,
+    request_path: &str,
+    relay: crate::settings::RelayProfile,
+) -> anyhow::Result<UpstreamProxyResponse> {
+    let request_json: Value = serde_json::from_str(body)?;
+    let is_stream = request_json
+        .get("stream")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    validate_upstream(&relay)?;
+    let (endpoint, upstream_body, wire_api) =
+        upstream_request_parts(&relay, request_json, request_path).await?;
+    let upstream = send_upstream_request_for_responses(
+        upstream_request_builder(
+            crate::http_client::proxied_client(&effective_user_agent(
+                &relay.user_agent,
+                original_user_agent,
+            ))?,
+            &endpoint,
+            relay.api_key.trim(),
+            is_stream,
+            &upstream_body,
+        ),
+        is_stream,
+    )
+    .await?;
+    let status_code = upstream.status().as_u16();
+    let content_type = upstream
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    Ok(UpstreamProxyResponse {
+        status_code,
+        is_stream: is_stream || content_type.contains("text/event-stream"),
+        content_type,
+        wire_api,
+        response: upstream,
+    })
 }
 
 pub async fn open_responses_proxy_request_with_settings(
@@ -762,8 +815,12 @@ fn select_model_route(
 pub async fn open_models_proxy_request(
     original_user_agent: Option<&str>,
 ) -> anyhow::Result<UpstreamProxyResponse> {
-    let settings = SettingsStore::default().load().unwrap_or_default();
-    let relay = crate::relay_rotation::select_relay_for_probe(&settings)?;
+    let relay = if let Some(relay) = crate::enterprise::enterprise_proxy_profile()? {
+        relay
+    } else {
+        let settings = SettingsStore::default().load().unwrap_or_default();
+        crate::relay_rotation::select_relay_for_probe(&settings)?
+    };
     validate_upstream(&relay)?;
 
     let endpoint = models_url(&relay.base_url);

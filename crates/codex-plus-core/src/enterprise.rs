@@ -16,6 +16,7 @@ const PRESERVED_PREFIX: &str = "# codex-plus-plus enterprise preserved-root: ";
 const SESSION_TARGET: &str = "CodexPlusPlus/enterprise/session";
 const REFRESH_TARGET: &str = "CodexPlusPlus/enterprise/refresh";
 const CREDENTIAL_TARGET: &str = "CodexPlusPlus/enterprise/inference";
+const ENTERPRISE_UPSTREAM_KEY: &str = "enterprise_upstream_base_url";
 const LOGIN_METHOD_FILE: &str = "enterprise-login-method.json";
 pub const LOGIN_METHOD_COMPANY: &str = "company";
 pub const LOGIN_METHOD_OFFICIAL: &str = "official";
@@ -139,7 +140,46 @@ pub fn enterprise_credential() -> anyhow::Result<Option<String>> {
     secure_store::read(CREDENTIAL_TARGET)
 }
 
-pub async fn restore() -> anyhow::Result<EnterpriseSnapshot> {
+pub fn enterprise_proxy_profile() -> anyhow::Result<Option<crate::settings::RelayProfile>> {
+    if !enterprise_mode_enabled() {
+        return Ok(None);
+    }
+    let config_path = crate::codex_home::default_codex_home_dir().join("config.toml");
+    let Ok(text) = std::fs::read_to_string(config_path) else {
+        return Ok(None);
+    };
+    if !text.contains(BEGIN_MARKER) || !text.contains(END_MARKER) {
+        return Ok(None);
+    }
+    let document = text.parse::<toml::Value>()?;
+    let provider = document
+        .get("model_providers")
+        .and_then(|value| value.get(PROVIDER_ID));
+    let Some(base_url) = provider
+        .and_then(|value| value.get(ENTERPRISE_UPSTREAM_KEY))
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    let Some(api_key) = enterprise_credential()? else {
+        return Ok(None);
+    };
+    let mut profile = crate::settings::RelayProfile::default();
+    profile.id = PROVIDER_ID.to_string();
+    profile.name = provider
+        .and_then(|value| value.get("name"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or("Company AI")
+        .to_string();
+    profile.base_url = base_url.to_string();
+    profile.api_key = api_key;
+    profile.protocol = crate::settings::RelayProtocol::Responses;
+    Ok(Some(profile))
+}
+
+pub async fn restore(executable: &Path) -> anyhow::Result<EnterpriseSnapshot> {
     if !enterprise_mode_enabled() {
         return Ok(snapshot("disabled", "Community Mode is active."));
     }
@@ -156,7 +196,10 @@ pub async fn restore() -> anyhow::Result<EnterpriseSnapshot> {
         ));
     };
     match load_snapshot(&access_token).await {
-        Ok(snapshot) => Ok(snapshot),
+        Ok(snapshot) => {
+            provision(&access_token, executable).await?;
+            load_snapshot(&access_token).await.or(Ok(snapshot))
+        }
         Err(error) if is_unauthorized(&error) => {
             let Some(refresh_token) = secure_store::read(REFRESH_TARGET)? else {
                 clear_credentials()?;
@@ -173,6 +216,7 @@ pub async fn restore() -> anyhow::Result<EnterpriseSnapshot> {
             )
             .await?;
             save_session(&session)?;
+            provision(&session.access_token, executable).await?;
             load_snapshot(&session.access_token).await
         }
         Err(error) => Err(error),
@@ -252,7 +296,8 @@ pub async fn use_company_login() -> anyhow::Result<EnterpriseSnapshot> {
         anyhow::bail!("Enterprise Mode is not enabled");
     }
     write_login_method(LOGIN_METHOD_COMPANY)?;
-    restore().await
+    let executable = std::env::current_exe()?;
+    restore(&executable).await
 }
 
 pub fn apply_official_login_config(home: &Path) -> anyhow::Result<()> {
@@ -661,21 +706,25 @@ pub fn remove_managed_config(path: &Path) -> anyhow::Result<()> {
     write_atomic(path, restored.trim().as_bytes())
 }
 
-fn build_managed_block(executable: &Path, profile: &EnterpriseProfile) -> String {
+fn build_managed_block(_executable: &Path, profile: &EnterpriseProfile) -> String {
     let quote = |value: &str| toml::Value::String(value.to_string()).to_string();
+    let proxy_base_url = crate::protocol_proxy::local_responses_proxy_base_url(
+        crate::protocol_proxy::DEFAULT_PROTOCOL_PROXY_PORT,
+    );
     format!(
-        "{BEGIN_MARKER}\nmodel = {}\nmodel_provider = {}\n\nmodel_providers.{}.name = {}\nmodel_providers.{}.base_url = {}\nmodel_providers.{}.wire_api = {}\nmodel_providers.{}.auth.command = {}\nmodel_providers.{}.auth.args = [\"--enterprise-credential\", \"get\"]\n{END_MARKER}",
+        "{BEGIN_MARKER}\nmodel = {}\nmodel_provider = {}\n\nmodel_providers.{}.name = {}\nmodel_providers.{}.base_url = {}\nmodel_providers.{}.wire_api = {}\nmodel_providers.{}.requires_openai_auth = false\nmodel_providers.{}.{} = {}\n{END_MARKER}",
         quote(&profile.default_model),
         quote(PROVIDER_ID),
         PROVIDER_ID,
         quote(&profile.display_name),
         PROVIDER_ID,
-        quote(profile.gateway_url.trim_end_matches('/')),
+        quote(&proxy_base_url),
         PROVIDER_ID,
         quote(&profile.wire_api),
         PROVIDER_ID,
-        quote(&executable.to_string_lossy()),
         PROVIDER_ID,
+        ENTERPRISE_UPSTREAM_KEY,
+        quote(profile.gateway_url.trim_end_matches('/')),
     )
 }
 
@@ -952,13 +1001,15 @@ mod tests {
     }
 
     #[test]
-    fn managed_config_uses_command_auth_without_secret() {
+    fn managed_config_uses_local_secure_proxy_without_secret() {
         let block = build_managed_block(
             Path::new("C:/Program Files/Codex++/manager.exe"),
             &profile(),
         );
-        assert!(block.contains("auth.command"));
-        assert!(block.contains("--enterprise-credential"));
+        assert!(block.contains("base_url = \"http://127.0.0.1:57321/v1\""));
+        assert!(block.contains("enterprise_upstream_base_url = \"https://api.ai.rydf-design.com/v1\""));
+        assert!(block.contains("requires_openai_auth = false"));
+        assert!(!block.contains("auth.command"));
         assert!(!block.contains("OPENAI_API_KEY"));
         assert!(!block.contains("sk-"));
     }
