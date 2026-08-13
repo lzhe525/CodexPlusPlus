@@ -152,6 +152,29 @@ fn manager_launch_button_spawns_silent_launcher_binary() {
 }
 
 #[test]
+fn launcher_repairs_enterprise_authentication_before_starting_codex() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let launcher_main = manifest_dir
+        .parent()
+        .and_then(std::path::Path::parent)
+        .unwrap()
+        .join("codex-plus-launcher/src/main.rs");
+    let launcher_main = std::fs::read_to_string(launcher_main).expect("read launcher main.rs");
+
+    let prepare = launcher_main
+        .find("prepare_enterprise_launch().await?")
+        .expect("launcher should prepare enterprise authentication");
+    let launch = launcher_main
+        .find("launch_and_inject_with_hooks(options, &hooks).await?")
+        .expect("launcher should start Codex");
+    assert!(prepare < launch);
+    assert!(launcher_main.contains("codex_plus_core::enterprise::restore(&executable)"));
+    assert!(launcher_main.contains("snapshot.state == \"authenticated\""));
+    assert!(launcher_main.contains("snapshot.credential_available"));
+    assert!(launcher_main.contains("snapshot.config_managed"));
+}
+
+#[test]
 fn macos_packager_hides_silent_launcher_but_not_manager() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let packager = manifest_dir

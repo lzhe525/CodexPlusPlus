@@ -82,6 +82,7 @@ async fn launcher_main() -> Result<()> {
         hooks.shutdown_helper(options.helper_port).await;
         return Ok(());
     }
+    prepare_enterprise_launch().await?;
     let Some(_guard) = acquire_single_instance_guard(options.debug_port)? else {
         activate_existing_codex_app(&options).await?;
         return Ok(());
@@ -92,6 +93,39 @@ async fn launcher_main() -> Result<()> {
     let hooks = LauncherHooks::default();
     let handle = launch_and_inject_with_hooks(options, &hooks).await?;
     handle.wait_for_codex_exit().await?;
+    Ok(())
+}
+
+async fn prepare_enterprise_launch() -> Result<()> {
+    if !codex_plus_core::enterprise::enterprise_mode_enabled()
+        || codex_plus_core::enterprise::current_login_method()
+            == codex_plus_core::enterprise::LOGIN_METHOD_OFFICIAL
+    {
+        return Ok(());
+    }
+
+    let executable = std::env::current_exe().context("resolve enterprise credential helper")?;
+    let snapshot = codex_plus_core::enterprise::restore(&executable)
+        .await
+        .context("prepare enterprise authentication before launching Codex")?;
+    let ready = snapshot.state == "authenticated"
+        && snapshot.credential_available
+        && snapshot.config_managed;
+    let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
+        "launcher.enterprise_prepare",
+        json!({
+            "state": snapshot.state,
+            "credential_available": snapshot.credential_available,
+            "config_managed": snapshot.config_managed,
+            "ready": ready
+        }),
+    );
+    if !ready {
+        anyhow::bail!(
+            "enterprise authentication is not ready ({}); open Codex++ Manager and sign in again",
+            snapshot.state
+        );
+    }
     Ok(())
 }
 
