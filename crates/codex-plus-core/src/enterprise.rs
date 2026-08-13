@@ -71,7 +71,9 @@ pub struct EnterpriseStatus {
 pub struct EnterpriseProfile {
     pub gateway_url: String,
     pub provider_id: String,
+    #[serde(default)]
     pub default_model: String,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub allowed_models: Vec<String>,
     pub wire_api: String,
     pub display_name: String,
@@ -269,10 +271,6 @@ pub async fn diagnostics() -> EnterpriseDiagnostics {
         .is_ok();
     let token = secure_store::read(SESSION_TARGET).ok().flatten();
     let login = token.is_some();
-    let status = match token.as_deref() {
-        Some(token) => load_status(token).await.ok(),
-        None => None,
-    };
     let credential = secure_store::read(CREDENTIAL_TARGET)
         .ok()
         .flatten()
@@ -288,11 +286,10 @@ pub async fn diagnostics() -> EnterpriseDiagnostics {
         .ok(),
         None => None,
     };
-    let model = profile.as_ref().is_some_and(|profile| {
-        status
-            .as_ref()
-            .is_some_and(|status| status.key.models.contains(&profile.default_model))
-    });
+    let model = match (profile.as_ref(), secure_store::read(CREDENTIAL_TARGET).ok().flatten()) {
+        (Some(profile), Some(credential)) => discover_user_models(profile, &credential).await.is_ok(),
+        _ => false,
+    };
     let codex_configuration =
         config_is_managed(&crate::codex_home::default_codex_home_dir().join("config.toml"));
     EnterpriseDiagnostics {
@@ -311,7 +308,7 @@ pub async fn diagnostics() -> EnterpriseDiagnostics {
 }
 
 async fn provision(access_token: &str, executable: &Path) -> anyhow::Result<()> {
-    let profile: EnterpriseProfile = request_json(
+    let mut profile: EnterpriseProfile = request_json(
         reqwest::Method::GET,
         "codex-profile",
         Some(access_token),
@@ -330,9 +327,10 @@ async fn provision(access_token: &str, executable: &Path) -> anyhow::Result<()> 
     if let Some(secret) = ensured.virtual_key.filter(|value| !value.trim().is_empty()) {
         secure_store::write(CREDENTIAL_TARGET, &secret)?;
     }
-    if secure_store::read(CREDENTIAL_TARGET)?.is_none() {
-        anyhow::bail!("Enterprise credential is unavailable; sign in again to recover it");
-    }
+    let credential = secure_store::read(CREDENTIAL_TARGET)?
+        .ok_or_else(|| anyhow::anyhow!("Enterprise credential is unavailable; sign in again to recover it"))?;
+    let models = discover_user_models(&profile, &credential).await?;
+    apply_user_models(&mut profile, models)?;
     write_managed_config(
         &crate::codex_home::default_codex_home_dir().join("config.toml"),
         executable,
@@ -342,13 +340,17 @@ async fn provision(access_token: &str, executable: &Path) -> anyhow::Result<()> 
 
 async fn load_snapshot(access_token: &str) -> anyhow::Result<EnterpriseSnapshot> {
     let status = load_status(access_token).await?;
-    let profile: EnterpriseProfile = request_json(
+    let mut profile: EnterpriseProfile = request_json(
         reqwest::Method::GET,
         "codex-profile",
         Some(access_token),
         None,
     )
     .await?;
+    if let Some(credential) = secure_store::read(CREDENTIAL_TARGET)? {
+        let models = discover_user_models(&profile, &credential).await?;
+        apply_user_models(&mut profile, models)?;
+    }
     Ok(EnterpriseSnapshot {
         enabled: true,
         state: "authenticated".to_string(),
@@ -532,11 +534,6 @@ fn validate_profile(profile: &EnterpriseProfile) -> anyhow::Result<()> {
     if profile.provider_id != PROVIDER_ID || profile.wire_api != "responses" {
         anyhow::bail!("Company AI returned an unsupported provider policy");
     }
-    if profile.default_model.trim().is_empty()
-        || !profile.allowed_models.contains(&profile.default_model)
-    {
-        anyhow::bail!("Company AI returned an invalid model policy");
-    }
     let gateway =
         reqwest::Url::parse(&profile.gateway_url).context("Company AI gateway URL is invalid")?;
     let configured = std::env::var("CODEX_PLUS_ENTERPRISE_URL").ok();
@@ -551,6 +548,83 @@ fn validate_profile(profile: &EnterpriseProfile) -> anyhow::Result<()> {
     {
         anyhow::bail!("Company AI gateway URL contains unsupported components");
     }
+    Ok(())
+}
+
+fn models_url(gateway_url: &str) -> String {
+    let base = gateway_url.trim_end_matches('/');
+    if base.to_ascii_lowercase().ends_with("/models") {
+        base.to_string()
+    } else if base
+        .rsplit('/')
+        .next()
+        .is_some_and(|segment| segment.eq_ignore_ascii_case("v1"))
+    {
+        format!("{base}/models")
+    } else {
+        format!("{base}/v1/models")
+    }
+}
+
+async fn discover_user_models(
+    profile: &EnterpriseProfile,
+    credential: &str,
+) -> anyhow::Result<Vec<String>> {
+    validate_profile(profile)?;
+    let response = crate::http_client::proxied_client("CodexPlusPlus-Enterprise")?
+        .get(models_url(&profile.gateway_url))
+        .bearer_auth(credential)
+        .send()
+        .await
+        .context("Unable to load models available to this Sub2API account")?;
+    let status = response.status();
+    let bytes = response.bytes().await.unwrap_or_default();
+    if !status.is_success() {
+        anyhow::bail!(
+            "Sub2API model discovery failed (HTTP {})",
+            status.as_u16()
+        );
+    }
+    let value: Value = serde_json::from_slice(&bytes)
+        .context("Sub2API returned an invalid model list")?;
+    let items = value
+        .get("data")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("Sub2API returned an invalid model list"))?;
+    let mut models = Vec::new();
+    for item in items {
+        let Some(model) = item
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|model| !model.is_empty())
+        else {
+            continue;
+        };
+        if !models.iter().any(|existing| existing == model) {
+            models.push(model.to_string());
+        }
+    }
+    if models.is_empty() {
+        anyhow::bail!("This Sub2API account currently has no available models");
+    }
+    Ok(models)
+}
+
+fn apply_user_models(
+    profile: &mut EnterpriseProfile,
+    models: Vec<String>,
+) -> anyhow::Result<()> {
+    let default_model = if models.contains(&profile.default_model) {
+        profile.default_model.clone()
+    } else {
+        models
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("This Sub2API account currently has no available models"))?
+    };
+    profile.default_model = default_model;
+    profile.allowed_models = models;
     Ok(())
 }
 
@@ -902,6 +976,42 @@ mod tests {
         let mut invalid = profile();
         invalid.wire_api = "chat_completions".to_string();
         assert!(validate_profile(&invalid).is_err());
+    }
+
+    #[test]
+    fn user_models_replace_launcher_policy_and_select_available_default() {
+        let mut profile = profile();
+        apply_user_models(
+            &mut profile,
+            vec!["gpt-5.5".to_string(), "gpt-5.6-sol".to_string()],
+        )
+        .unwrap();
+        assert_eq!(profile.default_model, "gpt-5.5");
+        assert_eq!(profile.allowed_models, ["gpt-5.5", "gpt-5.6-sol"]);
+    }
+
+    #[test]
+    fn user_models_keep_launcher_default_when_sub2_allows_it() {
+        let mut profile = profile();
+        apply_user_models(
+            &mut profile,
+            vec!["gpt-5.5".to_string(), "gpt-5.4-mini".to_string()],
+        )
+        .unwrap();
+        assert_eq!(profile.default_model, "gpt-5.4-mini");
+        assert_eq!(profile.allowed_models, ["gpt-5.5", "gpt-5.4-mini"]);
+    }
+
+    #[test]
+    fn models_endpoint_uses_gateway_version_prefix_once() {
+        assert_eq!(
+            models_url("https://api.ai.rydf-design.com/v1"),
+            "https://api.ai.rydf-design.com/v1/models"
+        );
+        assert_eq!(
+            models_url("https://api.example.test"),
+            "https://api.example.test/v1/models"
+        );
     }
 
     #[test]

@@ -219,11 +219,11 @@ export function EnterpriseAccount({ auth }: { auth: ReturnType<typeof useEnterpr
       </div>
       <div className="enterprise-metrics">
         <article><span>服务</span><strong>Connected</strong><small>{snapshot.profile?.displayName || "Company AI"}</small></article>
-        <article><span>默认模型</span><strong>{snapshot.profile?.defaultModel || "—"}</strong><small>{snapshot.profile?.allowedModels.length || 0} 个授权模型</small></article>
+        <article><span>默认模型</span><strong>{snapshot.profile?.defaultModel || "—"}</strong><small>Sub2API 返回 {snapshot.profile?.allowedModels.length || 0} 个可用模型</small></article>
         <article><span>本月用量</span><strong>${(snapshot.status?.usage.monthUsd || 0).toFixed(2)}</strong><small>今日 ${(snapshot.status?.usage.todayUsd || 0).toFixed(2)}</small></article>
         <article><span>凭据</span><strong>{snapshot.credentialAvailable ? "Protected" : "Missing"}</strong><small>{snapshot.configManaged ? "Codex 已配置" : "配置待修复"}</small></article>
       </div>
-      <section className="enterprise-models"><h3>授权模型</h3><div>{snapshot.profile?.allowedModels.map((model) => <span key={model}>{model}</span>)}</div></section>
+      <section className="enterprise-models"><h3>Sub2API 账号可用模型</h3><div>{snapshot.profile?.allowedModels.map((model) => <span key={model}>{model}</span>)}</div></section>
       <div className="enterprise-actions">
         <button onClick={() => void auth.refresh()} disabled={auth.busy}><RefreshCw /> 刷新并修复</button>
         <button onClick={() => void diagnose()} disabled={checking}><ShieldCheck /> {checking ? "诊断中…" : "连接诊断"}</button>
