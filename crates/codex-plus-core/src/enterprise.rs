@@ -74,9 +74,10 @@ pub struct EnterpriseProfile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionResponse {
+    #[serde(alias = "access_token")]
     access_token: String,
+    #[serde(alias = "refresh_token")]
     refresh_token: String,
-    user: EnterpriseUser,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -363,7 +364,8 @@ async fn request_json<T: for<'de> Deserialize<'de>>(
 ) -> anyhow::Result<T> {
     let value = request_value(method, endpoint, token, body).await?;
     let value = value.get("data").cloned().unwrap_or(value);
-    serde_json::from_value(value).context("Company AI returned an invalid response")
+    serde_json::from_value(value)
+        .map_err(|error| anyhow::anyhow!("Company AI returned an invalid response: {error}"))
 }
 
 async fn request_value(
@@ -789,5 +791,29 @@ mod tests {
         let mut invalid = profile();
         invalid.wire_api = "chat_completions".to_string();
         assert!(validate_profile(&invalid).is_err());
+    }
+
+    #[test]
+    fn session_response_accepts_launcher_camel_case_without_user() {
+        let session: SessionResponse = serde_json::from_value(json!({
+            "accessToken": "access",
+            "refreshToken": "refresh",
+            "expiresAt": "2026-08-13T12:00:00Z",
+            "tokenType": "Bearer"
+        }))
+        .unwrap();
+        assert_eq!(session.access_token, "access");
+        assert_eq!(session.refresh_token, "refresh");
+    }
+
+    #[test]
+    fn session_response_accepts_sub2api_snake_case() {
+        let session: SessionResponse = serde_json::from_value(json!({
+            "access_token": "access",
+            "refresh_token": "refresh"
+        }))
+        .unwrap();
+        assert_eq!(session.access_token, "access");
+        assert_eq!(session.refresh_token, "refresh");
     }
 }
