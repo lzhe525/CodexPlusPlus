@@ -850,6 +850,7 @@ impl BridgeRuntimeService for LauncherRuntimeService {
     }
 
     async fn ads(&self) -> anyhow::Result<Value> {
+        enterprise_feature_unavailable("推荐内容")?;
         codex_plus_core::ads::fetch_ad_list().await
     }
 

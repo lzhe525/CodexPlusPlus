@@ -2588,6 +2588,15 @@ fn persist_provider_sync_selection(provider: &str) {
 
 #[tauri::command]
 pub async fn load_ads() -> CommandResult<AdsPayload> {
+    if codex_plus_core::enterprise::enterprise_mode_enabled() {
+        return failed(
+            "推荐内容在企业版中不可用。",
+            AdsPayload {
+                version: 1,
+                ads: Vec::new(),
+            },
+        );
+    }
     match codex_plus_core::ads::fetch_ad_list().await {
         Ok(payload) => ok("推荐内容已加载。", ads_payload(payload)),
         Err(error) => failed(

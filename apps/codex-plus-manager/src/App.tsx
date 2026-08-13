@@ -2811,7 +2811,7 @@ export function App() {
   const visibleRoutes = (enterpriseCompany
     ? communityRoutes.map((item) => item.id === "relay" ? { ...item, label: "Company Account", icon: ShieldCheck } : item)
     : communityRoutes
-  ).filter((item) => !enterpriseEdition || item.id !== "zedRemote");
+  ).filter((item) => !enterpriseEdition || !["zedRemote", "recommendations"].includes(item.id));
 
   if (enterpriseAuth.busy && enterpriseAuth.snapshot === null) {
     return <div className={`shell ${theme}`}><div className="enterprise-gate"><div className="enterprise-login-card"><h1>Company Codex</h1><p>正在检查企业会话…</p></div></div></div>;
@@ -3019,7 +3019,7 @@ export function App() {
             <ZedRemoteScreen projects={zedRemoteProjects} form={settingsForm} onFormChange={setSettingsForm} actions={actions} />
           ) : null}
           {route === "userScripts" ? <UserScriptsScreen settings={settings} market={scriptMarket} actions={actions} /> : null}
-          {route === "recommendations" ? <RecommendationsScreen ads={ads} actions={actions} /> : null}
+          {route === "recommendations" && !enterpriseEdition ? <RecommendationsScreen ads={ads} actions={actions} /> : null}
           {route === "maintenance" ? (
             <MaintenanceScreen
               overview={overview}
