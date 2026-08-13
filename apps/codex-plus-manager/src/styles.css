@@ -151,6 +151,8 @@ body {
   border-right: 1px solid hsl(var(--sidebar-border));
   background: hsl(var(--sidebar-bg));
   padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
 }
 
 .brand {
@@ -263,7 +265,8 @@ body {
   margin-top: 12px;
   overflow-x: hidden;
   overflow-y: auto;
-  max-height: calc(100vh - 82px);
+  flex: 1;
+  min-height: 0;
   padding-right: 2px;
 }
 
@@ -4031,7 +4034,7 @@ select {
 
 .nav {
   gap: 2px;
-  max-height: calc(100vh - 94px);
+  max-height: none;
   margin-top: 4px;
   padding-right: 3px;
 }
@@ -5836,13 +5839,88 @@ select {
 .enterprise-login-card label { display: grid; gap: 8px; font-size: 13px; color: #cbd5e1; }
 .enterprise-login-card input { height: 46px; border-radius: 12px; border: 1px solid #303947; background: #0e131b; color: #fff; padding: 0 14px; }
 .enterprise-login-card button { height: 46px; border: 0; border-radius: 12px; background: #f1f5f9; color: #111827; font-weight: 700; }
-.enterprise-login-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.enterprise-login-method { height: auto !important; min-height: 86px; padding: 12px; display: grid; justify-items: start; gap: 4px; background: #0e131b !important; color: #e2e8f0 !important; border: 1px solid #303947 !important; text-align: left; font-weight: 500 !important; }
-.enterprise-login-method svg { width: 18px; height: 18px; color: #93a4c0; }
-.enterprise-login-method strong { font-size: 14px; }
-.enterprise-login-method span { font-size: 12px; color: #8b97a8; font-weight: 400; }
-.enterprise-login-method.active { border-color: #7c93ff !important; background: rgba(86, 112, 255, .16) !important; }
-.enterprise-login-method.active svg { color: #c7d2fe; }
+.enterprise-login-card .enterprise-login-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.enterprise-login-card .enterprise-login-method { height: auto !important; min-height: 86px; padding: 12px; display: grid; justify-items: start; gap: 4px; background: #0e131b !important; color: #e2e8f0 !important; border: 1px solid #303947 !important; text-align: left; font-weight: 500 !important; }
+.enterprise-login-card .enterprise-login-method svg { width: 18px; height: 18px; color: #93a4c0; }
+.enterprise-login-card .enterprise-login-method strong { font-size: 14px; }
+.enterprise-login-card .enterprise-login-method span { font-size: 12px; color: #8b97a8; font-weight: 400; }
+.enterprise-login-card .enterprise-login-method.active { border-color: #7c93ff !important; background: rgba(86, 112, 255, .16) !important; }
+.enterprise-login-card .enterprise-login-method.active svg { color: #c7d2fe; }
+.enterprise-method-picker {
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--card));
+}
+.enterprise-method-picker.compact {
+  margin: 10px 2px 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: hsl(var(--sidebar-muted));
+  border-color: hsl(var(--sidebar-border));
+}
+.enterprise-method-picker-head {
+  display: grid;
+  gap: 4px;
+}
+.enterprise-method-picker-head strong {
+  font-size: 14px;
+}
+.enterprise-method-picker-head span {
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  line-height: 1.5;
+}
+.enterprise-method-picker .enterprise-login-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.enterprise-method-picker .enterprise-login-method {
+  height: auto;
+  min-height: 74px;
+  padding: 10px;
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  text-align: left;
+  font-weight: 600;
+  cursor: pointer;
+}
+.enterprise-method-picker.compact .enterprise-login-method {
+  min-height: 64px;
+  padding: 8px;
+}
+.enterprise-method-picker .enterprise-login-method svg {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--muted-foreground));
+}
+.enterprise-method-picker .enterprise-login-method strong {
+  font-size: 13px;
+}
+.enterprise-method-picker .enterprise-login-method span {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
+.enterprise-method-picker .enterprise-login-method.active {
+  border-color: hsl(var(--brand-accent));
+  background: hsl(var(--brand-accent) / 0.14);
+}
+.enterprise-method-picker .enterprise-login-method.active svg {
+  color: hsl(var(--brand-accent));
+}
+.enterprise-method-picker .enterprise-login-method:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
 .enterprise-mark { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 15px; background: #5670ff; color: white; }
 .enterprise-error { padding: 12px 14px; border-radius: 10px; background: rgba(239,68,68,.12); color: #fca5a5; font-size: 13px; }
 .enterprise-account { display: grid; gap: 24px; }

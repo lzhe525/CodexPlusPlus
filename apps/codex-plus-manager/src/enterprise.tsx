@@ -76,6 +76,53 @@ export function useEnterpriseAuth() {
   };
 }
 
+export function EnterpriseLoginMethodPicker({
+  auth,
+  active,
+  compact = false,
+}: {
+  auth: ReturnType<typeof useEnterpriseAuth>;
+  active: "company" | "official";
+  compact?: boolean;
+}) {
+  return (
+    <section className={`enterprise-method-picker ${compact ? "compact" : ""}`}>
+      <div className="enterprise-method-picker-head">
+        <strong>{t("选择登录方式")}</strong>
+        {compact ? null : (
+          <span>{t("选择登录方式后，可使用公司账号或恢复原来的官方 ChatGPT 账号登录。")}</span>
+        )}
+      </div>
+      <div className="enterprise-login-methods" role="tablist" aria-label={t("选择登录方式")}>
+        <button
+          className={`enterprise-login-method ${active === "company" ? "active" : ""}`}
+          disabled={auth.busy}
+          onClick={() => {
+            if (active !== "company") void auth.useCompanyLogin();
+          }}
+          type="button"
+        >
+          <ShieldCheck />
+          <strong>{t("公司账号登录")}</strong>
+          <span>{t("Sub2API 企业账号")}</span>
+        </button>
+        <button
+          className={`enterprise-login-method ${active === "official" ? "active" : ""}`}
+          disabled={auth.busy}
+          onClick={() => {
+            if (active !== "official") void auth.useOfficialLogin();
+          }}
+          type="button"
+        >
+          <KeyRound />
+          <strong>{t("原账号登录")}</strong>
+          <span>{t("官方 ChatGPT 账号")}</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function EnterpriseLogin({ auth }: { auth: ReturnType<typeof useEnterpriseAuth> }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -92,7 +139,7 @@ export function EnterpriseLogin({ auth }: { auth: ReturnType<typeof useEnterpris
     <div className="enterprise-gate">
       <form className="enterprise-login-card" onSubmit={submit}>
         <div className="enterprise-mark"><ShieldCheck /></div>
-        <h1>Company Codex</h1>
+        <h1>{t("选择登录方式")}</h1>
         <p>{t("选择登录方式后，可使用公司账号或恢复原来的官方 ChatGPT 账号登录。")}</p>
         <div className="enterprise-login-methods" role="tablist" aria-label={t("选择登录方式")}>
           <button
@@ -165,6 +212,7 @@ export function EnterpriseAccount({ auth }: { auth: ReturnType<typeof useEnterpr
 
   return (
     <div className="enterprise-account">
+      <EnterpriseLoginMethodPicker auth={auth} active="company" />
       <div className="enterprise-account-head">
         <div><p className="eyebrow">COMPANY ACCOUNT</p><h2>{snapshot.user?.displayName || "Company user"}</h2><p>{snapshot.message}</p></div>
         <span className="enterprise-connected"><CheckCircle2 /> 已登录</span>

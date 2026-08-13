@@ -119,7 +119,7 @@ import {
   type DreamSkinVerificationResult,
 } from "./dream-skin";
 import { getLanguage, t, tf, toggleLanguage } from "@/i18n";
-import { EnterpriseAccount, EnterpriseLogin, isEnterpriseCompanyAuthenticated, isEnterpriseOfficialLogin, useEnterpriseAuth } from "./enterprise";
+import { EnterpriseAccount, EnterpriseLogin, EnterpriseLoginMethodPicker, isEnterpriseCompanyAuthenticated, isEnterpriseOfficialLogin, useEnterpriseAuth } from "./enterprise";
 
 const isWindowsPlatform = /\bWindows\b/i.test(navigator.userAgent);
 const dreamSkinWindowsPreviewUrl = new URL("../../../assets/inject/upstream/dream-skin/windows/dream-reference.jpg", import.meta.url).href;
@@ -2807,9 +2807,11 @@ export function App() {
   const hasUpdate = update?.updateAvailable === true;
   const enterpriseOfficial = isEnterpriseOfficialLogin(enterpriseAuth.snapshot);
   const enterpriseCompany = isEnterpriseCompanyAuthenticated(enterpriseAuth.snapshot);
-  const visibleRoutes = enterpriseCompany
+  const enterpriseEdition = enterpriseAuth.snapshot?.enabled === true;
+  const visibleRoutes = (enterpriseCompany
     ? communityRoutes.map((item) => item.id === "relay" ? { ...item, label: "Company Account", icon: ShieldCheck } : item)
-    : communityRoutes;
+    : communityRoutes
+  ).filter((item) => !enterpriseEdition || item.id !== "zedRemote");
 
   if (enterpriseAuth.busy && enterpriseAuth.snapshot === null) {
     return <div className={`shell ${theme}`}><div className="enterprise-gate"><div className="enterprise-login-card"><h1>Company Codex</h1><p>正在检查企业会话…</p></div></div></div>;
@@ -2842,6 +2844,13 @@ export function App() {
             <div className="brand-subtitle">{t("管理控制台")}</div>
           </div>
         </div>
+        {enterpriseAuth.snapshot?.enabled ? (
+          <EnterpriseLoginMethodPicker
+            active={enterpriseOfficial ? "official" : "company"}
+            auth={enterpriseAuth}
+            compact
+          />
+        ) : null}
         <nav className="nav">
           {visibleRoutes.map((item) => {
             const Icon = item.icon;
@@ -2886,15 +2895,29 @@ export function App() {
             >
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            {enterpriseOfficial ? (
-              <Button
-                onClick={() => void enterpriseAuth.useCompanyLogin()}
-                title={t("切换到公司账号登录")}
-                variant="outline"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                {t("公司账号登录")}
-              </Button>
+            {enterpriseAuth.snapshot?.enabled ? (
+              <>
+                <Button
+                  onClick={() => {
+                    if (!enterpriseCompany) void enterpriseAuth.useCompanyLogin();
+                  }}
+                  title={t("公司账号登录")}
+                  variant={enterpriseCompany ? "default" : "outline"}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  {t("公司账号登录")}
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!enterpriseOfficial) void enterpriseAuth.useOfficialLogin();
+                  }}
+                  title={t("原账号登录")}
+                  variant={enterpriseOfficial ? "default" : "outline"}
+                >
+                  <KeyRound className="h-4 w-4" />
+                  {t("原账号登录")}
+                </Button>
+              </>
             ) : null}
             <Button onClick={() => void actions.restart()} title={t("重启 Codex++")} variant="outline">
               <Rocket className="h-4 w-4" />
@@ -2907,14 +2930,30 @@ export function App() {
         </header>
         <section className="screen" key={route}>
           {route === "overview" ? (
-            <OverviewScreen
-              overview={overview}
-              pluginMarketplaceProgress={pluginMarketplaceProgress}
-              actions={actions}
-            />
+            <>
+              {enterpriseAuth.snapshot?.enabled ? (
+                <EnterpriseLoginMethodPicker
+                  active={enterpriseOfficial ? "official" : "company"}
+                  auth={enterpriseAuth}
+                />
+              ) : null}
+              <OverviewScreen
+                overview={overview}
+                pluginMarketplaceProgress={pluginMarketplaceProgress}
+                actions={actions}
+                showSponsor={!enterpriseEdition}
+              />
+            </>
           ) : null}
           {route === "relay" ? (
-            enterpriseCompany ? <EnterpriseAccount auth={enterpriseAuth} /> : <RelayScreen
+            enterpriseCompany ? <EnterpriseAccount auth={enterpriseAuth} /> : <>
+              {enterpriseOfficial ? (
+                <EnterpriseLoginMethodPicker
+                  active="official"
+                  auth={enterpriseAuth}
+                />
+              ) : null}
+              <RelayScreen
               settings={settings}
               relayFiles={relayFiles}
               envConflicts={envConflicts}
@@ -2922,6 +2961,7 @@ export function App() {
               form={settingsForm}
               actions={actions}
             />
+            </>
           ) : null}
           {route === "relayEnvironment" ? (
             <RelayEnvironmentScreen result={relayEnvironment} actions={actions} />
@@ -2955,6 +2995,7 @@ export function App() {
               remotePluginMarketplaceProgress={remotePluginMarketplaceProgress}
               onFormChange={setSettingsForm}
               actions={actions}
+              enterpriseEdition={enterpriseEdition}
             />
           ) : null}
           {route === "dreamSkin" ? (
@@ -2974,7 +3015,7 @@ export function App() {
               actions={actions}
             />
           ) : null}
-          {route === "zedRemote" ? (
+          {route === "zedRemote" && !enterpriseEdition ? (
             <ZedRemoteScreen projects={zedRemoteProjects} form={settingsForm} onFormChange={setSettingsForm} actions={actions} />
           ) : null}
           {route === "userScripts" ? <UserScriptsScreen settings={settings} market={scriptMarket} actions={actions} /> : null}
@@ -3185,15 +3226,17 @@ function OverviewScreen({
   overview,
   pluginMarketplaceProgress,
   actions,
+  showSponsor,
 }: {
   overview: OverviewResult | null;
   pluginMarketplaceProgress: TaskProgress;
   actions: Actions;
+  showSponsor: boolean;
 }) {
   const health = healthItems(overview);
   return (
     <>
-      <Panel className="jojocode-overview">
+      {showSponsor ? <Panel className="jojocode-overview">
         <CardContent>
           <div className="jojocode-overview-layout">
             <div className="jojocode-overview-main">
@@ -3226,7 +3269,7 @@ function OverviewScreen({
             </div>
           </div>
         </CardContent>
-      </Panel>
+      </Panel> : null}
       <Panel>
         <CardHead title={t("健康检查")} detail={t("概览只展示关键问题，具体配置在对应页面处理")} />
         <CardContent>
@@ -3577,6 +3620,7 @@ function EnhanceScreen({
   remotePluginMarketplaceProgress,
   onFormChange,
   actions,
+  enterpriseEdition,
 }: {
   form: BackendSettings;
   pluginMarketplaceProgress: TaskProgress;
@@ -3584,6 +3628,7 @@ function EnhanceScreen({
   remotePluginMarketplaceProgress: TaskProgress;
   onFormChange: (value: BackendSettings) => void;
   actions: Actions;
+  enterpriseEdition: boolean;
 }) {
   const setEnhanceFlag = (key: keyof BackendSettings, value: boolean) => onFormChange({ ...form, [key]: value });
   const setPersistedEnhanceFlag = (key: keyof BackendSettings, value: boolean) => {
@@ -3689,10 +3734,12 @@ function EnhanceScreen({
               <FeatureToggle title={t("原生菜单栏位置")} detail={t("把 Codex++ 菜单插入 Codex 顶部原生菜单栏。")} checked={form.codexAppNativeMenuPlacement} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppNativeMenuPlacement", value)} />
               <FeatureToggle title={t("原生菜单汉化")} detail={t("启动时通过本地主进程调试端口汉化 Codex 原生菜单；不修改安装包。需重启 Codex 才生效。")} checked={form.codexAppNativeMenuLocalization} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppNativeMenuLocalization", value)} />
             </FeatureGroup>
-            <FeatureGroup title={t("远程项目")} detail={t("连接 Zed Remote 和 upstream worktree 辅助能力。")}>
-              <FeatureToggle title="Zed Remote open" detail={t("远程 SSH 文件引用可直接用 Zed Remote Development 打开。")} checked={form.codexAppZedRemoteOpen} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppZedRemoteOpen", value)} />
-              <FeatureToggle title={t("Zed 项目记录")} detail={t("维护 Codex++ 自己的远程项目最近列表。")} checked={form.zedRemoteProjectRegistryEnabled} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("zedRemoteProjectRegistryEnabled", value)} />
-              <FeatureToggle title={t("同步 Zed settings")} detail={t("高级选项，默认关闭；当前实现不主动改写 Zed settings。")} checked={form.zedRemoteSyncToZedSettings} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("zedRemoteSyncToZedSettings", value)} />
+            <FeatureGroup title={t("远程项目")} detail={enterpriseEdition ? t("管理 upstream worktree 辅助能力。") : t("连接 Zed Remote 和 upstream worktree 辅助能力。")}>
+              {!enterpriseEdition ? <>
+                <FeatureToggle title="Zed Remote open" detail={t("远程 SSH 文件引用可直接用 Zed Remote Development 打开。")} checked={form.codexAppZedRemoteOpen} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppZedRemoteOpen", value)} />
+                <FeatureToggle title={t("Zed 项目记录")} detail={t("维护 Codex++ 自己的远程项目最近列表。")} checked={form.zedRemoteProjectRegistryEnabled} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("zedRemoteProjectRegistryEnabled", value)} />
+                <FeatureToggle title={t("同步 Zed settings")} detail={t("高级选项，默认关闭；当前实现不主动改写 Zed settings。")} checked={form.zedRemoteSyncToZedSettings} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("zedRemoteSyncToZedSettings", value)} />
+              </> : null}
               <FeatureToggle title="Upstream worktree" detail={t("从最新 upstream 分支创建 Git worktree。")} checked={form.codexAppUpstreamWorktreeCreate} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppUpstreamWorktreeCreate", value)} />
             </FeatureGroup>
           </div>
@@ -3705,7 +3752,7 @@ function EnhanceScreen({
           </div>
           <TaskProgressBox progress={pluginMarketplaceProgress} title={t("插件市场修复进度")} />
           <TaskProgressBox progress={remotePluginMarketplaceProgress} title={t("官方远端插件缓存进度")} />
-          <div className="zed-remote-settings">
+          {!enterpriseEdition ? <div className="zed-remote-settings">
             <Field label={t("Zed 默认打开策略")}>
               <AppSelect
                 disabled={!masterEnabled}
@@ -3719,7 +3766,7 @@ function EnhanceScreen({
                 value={form.zedRemoteOpenStrategy}
               />
             </Field>
-          </div>
+          </div> : null}
           <div className="hint-line">
             <Info className="h-4 w-4" />
             <span>{t("如果使用官方模式或官方混入 API 模式，通常不需要开启插件市场解锁。")}</span>

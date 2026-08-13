@@ -1913,6 +1913,14 @@ pub fn list_local_sessions(
 
 #[tauri::command]
 pub fn list_zed_remote_projects() -> CommandResult<ZedRemoteProjectsPayload> {
+    if codex_plus_core::enterprise::enterprise_mode_enabled() {
+        return failed(
+            "Zed 远程项目在企业版中不可用。",
+            ZedRemoteProjectsPayload {
+                projects: Vec::new(),
+            },
+        );
+    }
     let result = codex_plus_core::zed_remote::list_zed_remote_projects_response(&json!({}));
     if result.get("status").and_then(Value::as_str) == Some("ok") {
         let projects = serde_json::from_value::<Vec<ZedRemoteProject>>(
@@ -1940,6 +1948,15 @@ pub fn list_zed_remote_projects() -> CommandResult<ZedRemoteProjectsPayload> {
 
 #[tauri::command]
 pub fn open_zed_remote(payload: Value) -> CommandResult<ZedRemoteOpenPayload> {
+    if codex_plus_core::enterprise::enterprise_mode_enabled() {
+        return failed(
+            "Zed 远程项目在企业版中不可用。",
+            ZedRemoteOpenPayload {
+                url: String::new(),
+                strategy: ZedOpenStrategy::default(),
+            },
+        );
+    }
     let result = codex_plus_core::zed_remote::open_zed_remote(&payload);
     let strategy = result
         .get("strategy")
@@ -1968,6 +1985,14 @@ pub fn open_zed_remote(payload: Value) -> CommandResult<ZedRemoteOpenPayload> {
 
 #[tauri::command]
 pub fn forget_zed_remote_project(id: String) -> CommandResult<ZedRemoteProjectsPayload> {
+    if codex_plus_core::enterprise::enterprise_mode_enabled() {
+        return failed(
+            "Zed 远程项目在企业版中不可用。",
+            ZedRemoteProjectsPayload {
+                projects: Vec::new(),
+            },
+        );
+    }
     let result =
         codex_plus_core::zed_remote::forget_zed_remote_project_response(&json!({ "id": id }));
     if result.get("status").and_then(Value::as_str) != Some("ok") {
@@ -2073,6 +2098,9 @@ fn local_session_adapter(db_path: &Path) -> codex_plus_data::SQLiteStorageAdapte
 }
 
 fn normalize_settings_before_save(mut settings: BackendSettings) -> BackendSettings {
+    if codex_plus_core::enterprise::enterprise_mode_enabled() {
+        enforce_enterprise_feature_policy(&mut settings);
+    }
     if let Some(path) =
         codex_plus_core::app_paths::normalize_codex_app_path(Path::new(&settings.codex_app_path))
     {
@@ -2140,6 +2168,12 @@ fn normalize_settings_before_save(mut settings: BackendSettings) -> BackendSetti
         .trim()
         .to_string();
     settings
+}
+
+fn enforce_enterprise_feature_policy(settings: &mut BackendSettings) {
+    settings.codex_app_zed_remote_open = false;
+    settings.zed_remote_project_registry_enabled = false;
+    settings.zed_remote_sync_to_zed_settings = false;
 }
 
 fn relay_config_goals_value(config: &str) -> Option<bool> {
@@ -6035,5 +6069,23 @@ model_reasoning_effort = "high"
 
         assert_eq!(result.status, "failed");
         assert!(result.message.contains("只允许打开 http 或 https 链接"));
+    }
+
+    #[test]
+    fn enterprise_policy_disables_zed_features_without_disabling_worktrees() {
+        let mut settings = BackendSettings {
+            codex_app_zed_remote_open: true,
+            zed_remote_project_registry_enabled: true,
+            zed_remote_sync_to_zed_settings: true,
+            codex_app_upstream_worktree_create: true,
+            ..BackendSettings::default()
+        };
+
+        enforce_enterprise_feature_policy(&mut settings);
+
+        assert!(!settings.codex_app_zed_remote_open);
+        assert!(!settings.zed_remote_project_registry_enabled);
+        assert!(!settings.zed_remote_sync_to_zed_settings);
+        assert!(settings.codex_app_upstream_worktree_create);
     }
 }

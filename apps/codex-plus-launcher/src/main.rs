@@ -19,6 +19,13 @@ struct LauncherHooks {
     bridge_context: Arc<Mutex<Option<BridgeContext>>>,
 }
 
+fn enterprise_feature_unavailable(feature: &str) -> anyhow::Result<()> {
+    if codex_plus_core::enterprise::enterprise_mode_enabled() {
+        anyhow::bail!("{feature} is unavailable in the enterprise edition");
+    }
+    Ok(())
+}
+
 impl Default for LauncherHooks {
     fn default() -> Self {
         Self {
@@ -847,34 +854,41 @@ impl BridgeRuntimeService for LauncherRuntimeService {
     }
 
     async fn zed_remote_status(&self) -> anyhow::Result<Value> {
+        enterprise_feature_unavailable("Zed 远程项目")?;
         Ok(codex_plus_core::zed_remote::zed_remote_status())
     }
 
     async fn resolve_zed_remote_host(&self, payload: Value) -> anyhow::Result<Value> {
+        enterprise_feature_unavailable("Zed 远程项目")?;
         Ok(codex_plus_core::zed_remote::resolve_ssh_target_response(
             &payload,
         ))
     }
 
     async fn fallback_zed_remote_request(&self, payload: Value) -> anyhow::Result<Value> {
+        enterprise_feature_unavailable("Zed 远程项目")?;
         Ok(codex_plus_core::zed_remote::fallback_open_request_response(
             &payload,
         ))
     }
 
     async fn open_zed_remote(&self, payload: Value) -> anyhow::Result<Value> {
+        enterprise_feature_unavailable("Zed 远程项目")?;
         Ok(codex_plus_core::zed_remote::open_zed_remote(&payload))
     }
 
     async fn list_zed_remote_projects(&self, payload: Value) -> anyhow::Result<Value> {
+        enterprise_feature_unavailable("Zed 远程项目")?;
         Ok(codex_plus_core::zed_remote::list_zed_remote_projects_response(&payload))
     }
 
     async fn remember_zed_remote_project(&self, payload: Value) -> anyhow::Result<Value> {
+        enterprise_feature_unavailable("Zed 远程项目")?;
         Ok(codex_plus_core::zed_remote::remember_zed_remote_project_response(&payload))
     }
 
     async fn forget_zed_remote_project(&self, payload: Value) -> anyhow::Result<Value> {
+        enterprise_feature_unavailable("Zed 远程项目")?;
         Ok(codex_plus_core::zed_remote::forget_zed_remote_project_response(&payload))
     }
 
