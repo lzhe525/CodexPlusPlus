@@ -33,7 +33,7 @@ pub struct EnterpriseKeyInfo {
     pub rpm: u64,
     #[serde(default)]
     pub tpm: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub models: Vec<String>,
 }
 
@@ -83,11 +83,6 @@ struct SessionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct EnsureKeyResponse {
-    alias: String,
-    expires_at: String,
-    rpm: u64,
-    tpm: u64,
-    models: Vec<String>,
     virtual_key: Option<String>,
 }
 
@@ -364,8 +359,17 @@ async fn request_json<T: for<'de> Deserialize<'de>>(
 ) -> anyhow::Result<T> {
     let value = request_value(method, endpoint, token, body).await?;
     let value = value.get("data").cloned().unwrap_or(value);
-    serde_json::from_value(value)
-        .map_err(|error| anyhow::anyhow!("Company AI returned an invalid response: {error}"))
+    serde_json::from_value(value).map_err(|error| {
+        anyhow::anyhow!("Company AI returned an invalid response for {endpoint}: {error}")
+    })
+}
+
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Option::<T>::deserialize(deserializer).map(Option::unwrap_or_default)
 }
 
 async fn request_value(
@@ -815,5 +819,32 @@ mod tests {
         .unwrap();
         assert_eq!(session.access_token, "access");
         assert_eq!(session.refresh_token, "refresh");
+    }
+
+    #[test]
+    fn usage_key_accepts_null_models_from_existing_upstream_key() {
+        let key: EnterpriseKeyInfo = serde_json::from_value(json!({
+            "alias": "codex-launcher",
+            "expiresAt": null,
+            "rpm": 0,
+            "tpm": 0,
+            "models": null
+        }))
+        .unwrap();
+        assert!(key.models.is_empty());
+    }
+
+    #[test]
+    fn ensure_key_ignores_nullable_status_metadata() {
+        let key: EnsureKeyResponse = serde_json::from_value(json!({
+            "alias": "codex-launcher",
+            "expiresAt": null,
+            "rpm": 0,
+            "tpm": 0,
+            "models": null,
+            "virtualKey": "secret"
+        }))
+        .unwrap();
+        assert_eq!(key.virtual_key.as_deref(), Some("secret"));
     }
 }
