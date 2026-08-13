@@ -60,6 +60,94 @@ pub struct SettingsPayload {
     pub user_scripts: Value,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnterpriseLoginRequest {
+    pub email: String,
+    pub password: String,
+}
+
+#[tauri::command]
+pub async fn enterprise_restore() -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot>
+{
+    enterprise_snapshot_result(codex_plus_core::enterprise::restore().await)
+}
+
+#[tauri::command]
+pub async fn enterprise_login(
+    request: EnterpriseLoginRequest,
+) -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+    let executable = enterprise_credential_helper_path();
+    let result = enterprise_snapshot_result(
+        codex_plus_core::enterprise::login(&request.email, &request.password, &executable).await,
+    );
+    drop(request);
+    result
+}
+
+#[tauri::command]
+pub async fn enterprise_refresh() -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot>
+{
+    enterprise_snapshot_result(
+        codex_plus_core::enterprise::refresh(&enterprise_credential_helper_path()).await,
+    )
+}
+
+#[tauri::command]
+pub async fn enterprise_logout() -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+    enterprise_snapshot_result(codex_plus_core::enterprise::logout().await)
+}
+
+#[tauri::command]
+pub async fn enterprise_diagnostics()
+-> CommandResult<codex_plus_core::enterprise::EnterpriseDiagnostics> {
+    CommandResult {
+        status: "ok".to_string(),
+        message: "Enterprise diagnostics completed.".to_string(),
+        payload: codex_plus_core::enterprise::diagnostics().await,
+    }
+}
+
+fn enterprise_snapshot_result(
+    result: anyhow::Result<codex_plus_core::enterprise::EnterpriseSnapshot>,
+) -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+    match result {
+        Ok(snapshot) => CommandResult {
+            status: "ok".to_string(),
+            message: snapshot.message.clone(),
+            payload: snapshot,
+        },
+        Err(error) => CommandResult {
+            status: "failed".to_string(),
+            message: error.to_string(),
+            payload: codex_plus_core::enterprise::EnterpriseSnapshot {
+                enabled: codex_plus_core::enterprise::enterprise_mode_enabled(),
+                state: "error".to_string(),
+                user: None,
+                status: None,
+                profile: None,
+                credential_available: false,
+                config_managed: false,
+                message: error.to_string(),
+            },
+        },
+    }
+}
+
+fn enterprise_credential_helper_path() -> PathBuf {
+    let current =
+        std::env::current_exe().unwrap_or_else(|_| PathBuf::from("codex-plus-plus-manager"));
+    let file_name = if cfg!(windows) {
+        "codex-plus-plus.exe"
+    } else {
+        "codex-plus-plus"
+    };
+    current
+        .parent()
+        .map(|parent| parent.join(file_name))
+        .unwrap_or(current)
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DreamSkinImagePayload {

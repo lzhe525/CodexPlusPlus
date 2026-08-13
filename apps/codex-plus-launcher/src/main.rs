@@ -59,6 +59,13 @@ async fn main() -> Result<()> {
 
 async fn launcher_main() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args.as_slice() == ["--enterprise-credential", "get"] {
+        if let Some(credential) = codex_plus_core::enterprise::enterprise_credential()? {
+            print!("{credential}");
+            return Ok(());
+        }
+        anyhow::bail!("enterprise credential is unavailable");
+    }
     let helper_only = args.iter().any(|arg| arg == "--helper-only");
     let options = parse_launch_options(args.iter());
     if helper_only {

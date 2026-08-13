@@ -119,6 +119,7 @@ import {
   type DreamSkinVerificationResult,
 } from "./dream-skin";
 import { getLanguage, t, tf, toggleLanguage } from "@/i18n";
+import { EnterpriseAccount, EnterpriseLogin, useEnterpriseAuth } from "./enterprise";
 
 const isWindowsPlatform = /\bWindows\b/i.test(navigator.userAgent);
 const dreamSkinWindowsPreviewUrl = new URL("../../../assets/inject/upstream/dream-skin/windows/dream-reference.jpg", import.meta.url).href;
@@ -775,7 +776,7 @@ type StartupResult = CommandResult<{
 type Route = "overview" | "relay" | "relayEnvironment" | "sessions" | "context" | "enhance" | "dreamSkin" | "zedRemote" | "userScripts" | "recommendations" | "maintenance" | "about" | "settings";
 type Theme = "dark" | "light";
 
-const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string }> = [
+const communityRoutes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string }> = [
   { id: "overview", label: t("概览"), icon: LayoutDashboard },
   { id: "relay", label: t("供应商配置"), icon: KeyRound },
   { id: "sessions", label: t("会话管理"), icon: MessageCircle },
@@ -884,6 +885,7 @@ const defaultSettings: BackendSettings = {
 };
 
 export function App() {
+  const enterpriseAuth = useEnterpriseAuth();
   const [theme, setTheme] = useState<Theme>(() => loadInitialTheme());
   const [route, setRoute] = useState<Route>(() => loadInitialRoute());
   const [notice, setNotice] = useState<{ title: string; message: string; status?: Status } | null>(null);
@@ -2803,6 +2805,16 @@ export function App() {
     [route, launchForm, settingsForm, settings, overview, removeOwnedData, update, updateInstallProgress.active, logs, diagnostics, theme, relayFiles, localSessions, zedRemoteProjects, selectedProviderSyncTarget, envConflicts, relayEnvironment, ccsProviders, dreamSkinLibrary, dreamSkinMarket, dreamSkinCommunity, selectedDreamSkinTheme, savedDreamSkinThemeDraft, dreamSkinThemeDraft, dreamSkinDraftDirty, pendingDreamSkinRestart],
   );
   const hasUpdate = update?.updateAvailable === true;
+  const visibleRoutes = enterpriseAuth.snapshot?.enabled
+    ? communityRoutes.map((item) => item.id === "relay" ? { ...item, label: "Company Account", icon: ShieldCheck } : item)
+    : communityRoutes;
+
+  if (enterpriseAuth.busy && enterpriseAuth.snapshot === null) {
+    return <div className={`shell ${theme}`}><div className="enterprise-gate"><div className="enterprise-login-card"><h1>Company Codex</h1><p>正在检查企业会话…</p></div></div></div>;
+  }
+  if (enterpriseAuth.snapshot?.enabled && enterpriseAuth.snapshot.state !== "authenticated") {
+    return <div className={`shell ${theme}`}><EnterpriseLogin auth={enterpriseAuth} /></div>;
+  }
 
   return (
     <div className={`shell ${theme}`}>
@@ -2829,7 +2841,7 @@ export function App() {
           </div>
         </div>
         <nav className="nav">
-          {routes.map((item) => {
+          {visibleRoutes.map((item) => {
             const Icon = item.icon;
             return (
             <button
@@ -2852,8 +2864,8 @@ export function App() {
       <main className="workspace">
         <header className="topbar" key={`topbar-${route}`}>
           <div>
-            <h1>{routeTitle(route)}</h1>
-            <p>{routeSubtitle(route)}</p>
+            <h1>{enterpriseAuth.snapshot?.enabled && route === "relay" ? "Company Account" : routeTitle(route)}</h1>
+            <p>{enterpriseAuth.snapshot?.enabled && route === "relay" ? "企业身份、授权模型、用量与连接诊断" : routeSubtitle(route)}</p>
           </div>
           <div className="topbar-actions">
             <Button
@@ -2890,7 +2902,7 @@ export function App() {
             />
           ) : null}
           {route === "relay" ? (
-            <RelayScreen
+            enterpriseAuth.snapshot?.enabled ? <EnterpriseAccount auth={enterpriseAuth} /> : <RelayScreen
               settings={settings}
               relayFiles={relayFiles}
               envConflicts={envConflicts}
@@ -7728,7 +7740,7 @@ function isExpiredAd(ad: AdItem) {
 }
 
 function routeTitle(route: Route) {
-  return routes.find((item) => item.id === route)?.label ?? t("概览");
+  return communityRoutes.find((item) => item.id === route)?.label ?? t("概览");
 }
 
 function routeSubtitle(route: Route) {
