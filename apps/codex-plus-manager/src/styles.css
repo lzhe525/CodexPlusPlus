@@ -5836,6 +5836,13 @@ select {
 .enterprise-login-card label { display: grid; gap: 8px; font-size: 13px; color: #cbd5e1; }
 .enterprise-login-card input { height: 46px; border-radius: 12px; border: 1px solid #303947; background: #0e131b; color: #fff; padding: 0 14px; }
 .enterprise-login-card button { height: 46px; border: 0; border-radius: 12px; background: #f1f5f9; color: #111827; font-weight: 700; }
+.enterprise-login-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.enterprise-login-method { height: auto !important; min-height: 86px; padding: 12px; display: grid; justify-items: start; gap: 4px; background: #0e131b !important; color: #e2e8f0 !important; border: 1px solid #303947 !important; text-align: left; font-weight: 500 !important; }
+.enterprise-login-method svg { width: 18px; height: 18px; color: #93a4c0; }
+.enterprise-login-method strong { font-size: 14px; }
+.enterprise-login-method span { font-size: 12px; color: #8b97a8; font-weight: 400; }
+.enterprise-login-method.active { border-color: #7c93ff !important; background: rgba(86, 112, 255, .16) !important; }
+.enterprise-login-method.active svg { color: #c7d2fe; }
 .enterprise-mark { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 15px; background: #5670ff; color: white; }
 .enterprise-error { padding: 12px 14px; border-radius: 10px; background: rgba(239,68,68,.12); color: #fca5a5; font-size: 13px; }
 .enterprise-account { display: grid; gap: 24px; }

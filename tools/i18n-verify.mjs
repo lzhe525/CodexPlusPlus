@@ -22,6 +22,7 @@ const ts = require("typescript");
 const SRC_FILES = [
   "src/App.tsx",
   "src/components/ProviderPresetSelector.tsx",
+  "src/enterprise.tsx",
 ];
 
 // ── Collect the keys referenced by t()/tf() across the source. ──────────────

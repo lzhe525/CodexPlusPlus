@@ -1,8 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+use crate::settings::LaunchMode;
 
 const API_PREFIX: &str = "launcher/v1";
 const DEFAULT_LAUNCHER_URL: &str = "https://api.ai.rydf-design.com";
@@ -13,6 +16,9 @@ const PRESERVED_PREFIX: &str = "# codex-plus-plus enterprise preserved-root: ";
 const SESSION_TARGET: &str = "CodexPlusPlus/enterprise/session";
 const REFRESH_TARGET: &str = "CodexPlusPlus/enterprise/refresh";
 const CREDENTIAL_TARGET: &str = "CodexPlusPlus/enterprise/inference";
+const LOGIN_METHOD_FILE: &str = "enterprise-login-method.json";
+pub const LOGIN_METHOD_COMPANY: &str = "company";
+pub const LOGIN_METHOD_OFFICIAL: &str = "official";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +102,8 @@ pub struct EnterpriseSnapshot {
     pub profile: Option<EnterpriseProfile>,
     pub credential_available: bool,
     pub config_managed: bool,
+    #[serde(default)]
+    pub login_method: String,
     pub message: String,
 }
 
@@ -132,6 +140,12 @@ pub fn enterprise_credential() -> anyhow::Result<Option<String>> {
 pub async fn restore() -> anyhow::Result<EnterpriseSnapshot> {
     if !enterprise_mode_enabled() {
         return Ok(snapshot("disabled", "Community Mode is active."));
+    }
+    if current_login_method() == LOGIN_METHOD_OFFICIAL {
+        return Ok(snapshot(
+            "official",
+            "已切换到原账号登录；可使用官方 ChatGPT 账号。",
+        ));
     }
     let Some(access_token) = secure_store::read(SESSION_TARGET)? else {
         return Ok(snapshot(
@@ -174,6 +188,7 @@ pub async fn login(
     if email.trim().is_empty() || password.is_empty() {
         anyhow::bail!("Email and password are required");
     }
+    write_login_method(LOGIN_METHOD_COMPANY)?;
     let session: SessionResponse = request_json(
         reqwest::Method::POST,
         "login",
@@ -206,10 +221,46 @@ pub async fn logout() -> anyhow::Result<EnterpriseSnapshot> {
     }
     clear_credentials()?;
     remove_managed_config(&crate::codex_home::default_codex_home_dir().join("config.toml"))?;
+    write_login_method(LOGIN_METHOD_COMPANY)?;
     Ok(snapshot(
         "unauthenticated",
         "Signed out and removed this device credential.",
     ))
+}
+
+pub async fn use_official_login() -> anyhow::Result<EnterpriseSnapshot> {
+    write_login_method(LOGIN_METHOD_OFFICIAL)?;
+    if let Some(access_token) = secure_store::read(SESSION_TARGET).ok().flatten() {
+        let _ = request_value(reqwest::Method::POST, "logout", Some(&access_token), None).await;
+    }
+    let _ = clear_credentials();
+    apply_official_login_config(&crate::codex_home::default_codex_home_dir())?;
+    if let Ok(mut settings) = crate::settings::SettingsStore::default().load() {
+        settings.launch_mode = LaunchMode::Relay;
+        let _ = crate::settings::SettingsStore::default().save(&settings);
+    }
+    Ok(snapshot(
+        "official",
+        "已切换到原账号登录，并恢复官方 ChatGPT 登录途径。",
+    ))
+}
+
+pub async fn use_company_login() -> anyhow::Result<EnterpriseSnapshot> {
+    if !enterprise_mode_enabled() {
+        anyhow::bail!("Enterprise Mode is not enabled");
+    }
+    write_login_method(LOGIN_METHOD_COMPANY)?;
+    restore().await
+}
+
+pub fn apply_official_login_config(home: &Path) -> anyhow::Result<()> {
+    remove_managed_config(&home.join("config.toml"))?;
+    crate::relay_config::clear_relay_config_to_home(home)?;
+    Ok(())
+}
+
+pub fn current_login_method() -> String {
+    read_login_method(&login_method_path())
 }
 
 pub async fn diagnostics() -> EnterpriseDiagnostics {
@@ -308,6 +359,7 @@ async fn load_snapshot(access_token: &str) -> anyhow::Result<EnterpriseSnapshot>
         config_managed: config_is_managed(
             &crate::codex_home::default_codex_home_dir().join("config.toml"),
         ),
+        login_method: current_login_method(),
         message: "Connected to Company AI.".to_string(),
     })
 }
@@ -347,8 +399,63 @@ fn snapshot(state: &str, message: &str) -> EnterpriseSnapshot {
         config_managed: config_is_managed(
             &crate::codex_home::default_codex_home_dir().join("config.toml"),
         ),
+        login_method: current_login_method(),
         message: message.to_string(),
     }
+}
+
+fn login_method_path() -> PathBuf {
+    LOGIN_METHOD_PATH_FOR_TESTS
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|path| path.clone())
+        .unwrap_or_else(|| crate::paths::default_app_state_dir().join(LOGIN_METHOD_FILE))
+}
+
+fn read_login_method(path: &Path) -> String {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return LOGIN_METHOD_COMPANY.to_string();
+    };
+    serde_json::from_str::<Value>(&text)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("method")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .map(|method| {
+            if method == LOGIN_METHOD_OFFICIAL {
+                LOGIN_METHOD_OFFICIAL.to_string()
+            } else {
+                LOGIN_METHOD_COMPANY.to_string()
+            }
+        })
+        .unwrap_or_else(|| LOGIN_METHOD_COMPANY.to_string())
+}
+
+fn write_login_method(method: &str) -> anyhow::Result<()> {
+    let path = login_method_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(
+        path,
+        serde_json::to_vec_pretty(&json!({ "method": method }))?,
+    )?;
+    Ok(())
+}
+
+static LOGIN_METHOD_PATH_FOR_TESTS: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
+
+#[cfg(test)]
+pub fn set_login_method_path_for_tests(path: Option<PathBuf>) -> Option<PathBuf> {
+    LOGIN_METHOD_PATH_FOR_TESTS
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|mut current| std::mem::replace(&mut *current, path))
 }
 
 async fn request_json<T: for<'de> Deserialize<'de>>(
@@ -846,5 +953,57 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(key.virtual_key.as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn login_method_file_defaults_to_company_and_reads_official() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("enterprise-login-method.json");
+        assert_eq!(read_login_method(&path), LOGIN_METHOD_COMPANY);
+        std::fs::write(&path, r#"{"method":"official"}"#).unwrap();
+        assert_eq!(read_login_method(&path), LOGIN_METHOD_OFFICIAL);
+        std::fs::write(&path, r#"{"method":"company"}"#).unwrap();
+        assert_eq!(read_login_method(&path), LOGIN_METHOD_COMPANY);
+    }
+
+    #[test]
+    fn official_login_config_removes_enterprise_provider_and_restores_chatgpt_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path();
+        write_managed_config(
+            &home.join("config.toml"),
+            Path::new("C:/Program Files/Codex++/codex-plus-plus.exe"),
+            &profile(),
+        )
+        .unwrap();
+        std::fs::write(
+            home.join("auth.json"),
+            r#"{"OPENAI_API_KEY":"sk-test","auth_mode":"chatgpt","tokens":{"access_token":"keep"}}"#,
+        )
+        .unwrap();
+
+        apply_official_login_config(home).unwrap();
+
+        let config = std::fs::read_to_string(home.join("config.toml")).unwrap_or_default();
+        assert!(!config.contains("company-ai"));
+        assert!(!config.contains("model_provider"));
+        assert!(!config.contains(BEGIN_MARKER));
+        let auth: Value =
+            serde_json::from_str(&std::fs::read_to_string(home.join("auth.json")).unwrap()).unwrap();
+        assert!(auth.get("OPENAI_API_KEY").is_none());
+        assert_eq!(auth["auth_mode"], "chatgpt");
+        assert_eq!(auth["tokens"]["access_token"], "keep");
+    }
+
+    #[test]
+    fn current_login_method_reads_overridden_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("enterprise-login-method.json");
+        let previous = set_login_method_path_for_tests(Some(path));
+        write_login_method(LOGIN_METHOD_OFFICIAL).unwrap();
+        assert_eq!(current_login_method(), LOGIN_METHOD_OFFICIAL);
+        write_login_method(LOGIN_METHOD_COMPANY).unwrap();
+        assert_eq!(current_login_method(), LOGIN_METHOD_COMPANY);
+        set_login_method_path_for_tests(previous);
     }
 }

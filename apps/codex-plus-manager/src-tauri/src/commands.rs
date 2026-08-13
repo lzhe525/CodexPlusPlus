@@ -99,6 +99,18 @@ pub async fn enterprise_logout() -> CommandResult<codex_plus_core::enterprise::E
 }
 
 #[tauri::command]
+pub async fn enterprise_use_official_login()
+-> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+    enterprise_snapshot_result(codex_plus_core::enterprise::use_official_login().await)
+}
+
+#[tauri::command]
+pub async fn enterprise_use_company_login()
+-> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+    enterprise_snapshot_result(codex_plus_core::enterprise::use_company_login().await)
+}
+
+#[tauri::command]
 pub async fn enterprise_diagnostics()
 -> CommandResult<codex_plus_core::enterprise::EnterpriseDiagnostics> {
     CommandResult {
@@ -128,6 +140,7 @@ fn enterprise_snapshot_result(
                 profile: None,
                 credential_available: false,
                 config_managed: false,
+                login_method: codex_plus_core::enterprise::current_login_method(),
                 message: error.to_string(),
             },
         },

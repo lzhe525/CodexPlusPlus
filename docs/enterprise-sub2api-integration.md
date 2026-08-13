@@ -28,7 +28,7 @@ Codex Desktop ---- Responses API ----> Sub2API gateway
 
 The existing company Launcher API is the client-facing provisioning boundary. It authenticates against the real Sub2API endpoints (`/api/v1/auth/login`, `/auth/me`, `/keys`, `/usage/*`) and does not return the upstream member JWT to the desktop client. The desktop receives opaque launcher access/refresh tokens and a restricted inference credential.
 
-This fork ships in Enterprise Mode by default. `CODEX_PLUS_ENTERPRISE_MODE=0` restores the upstream-compatible Community Mode for development or upstream synchronization. In Enterprise Mode, the Provider page becomes Company Account, and ordinary provider editing is not presented as the primary workflow.
+This fork ships in Enterprise Mode by default. `CODEX_PLUS_ENTERPRISE_MODE=0` restores the upstream-compatible Community Mode for development or upstream synchronization. In Enterprise Mode, the login screen offers company account or original official ChatGPT login. Choosing original account login removes the enterprise-managed config, restores the default official ChatGPT login path, and shows the community Provider page. After a company login, the Provider page becomes Company Account, with a switch back to original account login.
 
 Production uses the single configured Launcher API origin `https://api.ai.rydf-design.com`. Development may override it with `CODEX_PLUS_ENTERPRISE_URL`; provisioning validates that the returned gateway is an absolute URL without embedded credentials, query, or fragment, and production requires HTTPS.
 

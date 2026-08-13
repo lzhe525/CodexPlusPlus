@@ -406,6 +406,23 @@ export const EN_PLAIN: Record<string, string> = {
     "Official mixed API should not store OPENAI_API_KEY in auth.json. Clear this provider's auth.json before switching.",
   "官方登录": "Official login",
   "官方登录模式": "Official login mode",
+  "官方 ChatGPT 账号": "Official ChatGPT account",
+  "原账号登录": "Original account login",
+  "公司账号登录": "Company account login",
+  "选择登录方式": "Choose login method",
+  "选择登录方式后，可使用公司账号或恢复原来的官方 ChatGPT 账号登录。":
+    "Choose a login method to use your company account or restore the original official ChatGPT login.",
+  "Sub2API 企业账号": "Sub2API company account",
+  "使用 ChatGPT / Codex 官方账号。将移除企业托管配置，并恢复默认官方登录途径。":
+    "Use your official ChatGPT / Codex account. This removes the enterprise-managed config and restores the default official login path.",
+  "正在恢复…": "Restoring…",
+  "进入并恢复官方登录": "Continue and restore official login",
+  "之后可在供应商配置中继续使用官方登录，或随时切回公司账号。":
+    "You can keep using official login in provider settings, or switch back to the company account at any time.",
+  "切换到原账号登录": "Switch to original account login",
+  "切换到公司账号登录": "Switch to company account login",
+  "当前使用原账号登录；供应商配置与官方 ChatGPT 登录途径已恢复。":
+    "Using original account login. Provider settings and the official ChatGPT login path have been restored.",
   "对话居中宽度": "Centered conversation width",
   "导入 Codex++ 供应商": "Import Codex++ provider",
   "尚未刷新": "Not refreshed yet",
@@ -997,6 +1014,8 @@ export const EN_BACKEND: Record<string, string> = {
   "中转配置已写入，密钥未在界面明文显示。": "Relay config written. Keys are not shown in plaintext in the UI.",
   "聚合供应商配置已写入，真实请求会由本地代理按策略轮转。": "Aggregate provider config written. Real requests will be rotated by the local proxy according to the strategy.",
   "已清除 custom 中转 API 模式，并切换到官方 ChatGPT 登录模式。": "Custom relay API mode cleared. Switched to official ChatGPT login mode.",
+  "已切换到原账号登录；可使用官方 ChatGPT 账号。": "Switched to original account login. You can use the official ChatGPT account.",
+  "已切换到原账号登录，并恢复官方 ChatGPT 登录途径。": "Switched to original account login and restored the official ChatGPT login path.",
   "纯 API 模式已写入：config.toml 已写入 custom provider，auth.json 已切换为当前供应商。": "Pure API mode written: config.toml now has a custom provider, auth.json switched to the current provider.",
   "纯 API 配置写入后未检测到完整 custom provider，请检查 config.toml 和供应商 API Key。": "After writing pure API config, no complete custom provider was detected. Please check config.toml and the provider API Key.",
   "供应商导入后重新读取设置失败": "Failed to reload settings after provider import",

@@ -119,7 +119,7 @@ import {
   type DreamSkinVerificationResult,
 } from "./dream-skin";
 import { getLanguage, t, tf, toggleLanguage } from "@/i18n";
-import { EnterpriseAccount, EnterpriseLogin, useEnterpriseAuth } from "./enterprise";
+import { EnterpriseAccount, EnterpriseLogin, isEnterpriseCompanyAuthenticated, isEnterpriseOfficialLogin, useEnterpriseAuth } from "./enterprise";
 
 const isWindowsPlatform = /\bWindows\b/i.test(navigator.userAgent);
 const dreamSkinWindowsPreviewUrl = new URL("../../../assets/inject/upstream/dream-skin/windows/dream-reference.jpg", import.meta.url).href;
@@ -2805,14 +2805,16 @@ export function App() {
     [route, launchForm, settingsForm, settings, overview, removeOwnedData, update, updateInstallProgress.active, logs, diagnostics, theme, relayFiles, localSessions, zedRemoteProjects, selectedProviderSyncTarget, envConflicts, relayEnvironment, ccsProviders, dreamSkinLibrary, dreamSkinMarket, dreamSkinCommunity, selectedDreamSkinTheme, savedDreamSkinThemeDraft, dreamSkinThemeDraft, dreamSkinDraftDirty, pendingDreamSkinRestart],
   );
   const hasUpdate = update?.updateAvailable === true;
-  const visibleRoutes = enterpriseAuth.snapshot?.enabled
+  const enterpriseOfficial = isEnterpriseOfficialLogin(enterpriseAuth.snapshot);
+  const enterpriseCompany = isEnterpriseCompanyAuthenticated(enterpriseAuth.snapshot);
+  const visibleRoutes = enterpriseCompany
     ? communityRoutes.map((item) => item.id === "relay" ? { ...item, label: "Company Account", icon: ShieldCheck } : item)
     : communityRoutes;
 
   if (enterpriseAuth.busy && enterpriseAuth.snapshot === null) {
     return <div className={`shell ${theme}`}><div className="enterprise-gate"><div className="enterprise-login-card"><h1>Company Codex</h1><p>正在检查企业会话…</p></div></div></div>;
   }
-  if (enterpriseAuth.snapshot?.enabled && enterpriseAuth.snapshot.state !== "authenticated") {
+  if (enterpriseAuth.snapshot?.enabled && !enterpriseCompany && !enterpriseOfficial) {
     return <div className={`shell ${theme}`}><EnterpriseLogin auth={enterpriseAuth} /></div>;
   }
 
@@ -2864,8 +2866,8 @@ export function App() {
       <main className="workspace">
         <header className="topbar" key={`topbar-${route}`}>
           <div>
-            <h1>{enterpriseAuth.snapshot?.enabled && route === "relay" ? "Company Account" : routeTitle(route)}</h1>
-            <p>{enterpriseAuth.snapshot?.enabled && route === "relay" ? "企业身份、授权模型、用量与连接诊断" : routeSubtitle(route)}</p>
+            <h1>{enterpriseCompany && route === "relay" ? "Company Account" : routeTitle(route)}</h1>
+            <p>{enterpriseCompany && route === "relay" ? "企业身份、授权模型、用量与连接诊断" : enterpriseOfficial && route === "relay" ? t("当前使用原账号登录；供应商配置与官方 ChatGPT 登录途径已恢复。") : routeSubtitle(route)}</p>
           </div>
           <div className="topbar-actions">
             <Button
@@ -2884,6 +2886,16 @@ export function App() {
             >
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
+            {enterpriseOfficial ? (
+              <Button
+                onClick={() => void enterpriseAuth.useCompanyLogin()}
+                title={t("切换到公司账号登录")}
+                variant="outline"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                {t("公司账号登录")}
+              </Button>
+            ) : null}
             <Button onClick={() => void actions.restart()} title={t("重启 Codex++")} variant="outline">
               <Rocket className="h-4 w-4" />
               {t("重启 Codex++")}
@@ -2902,7 +2914,7 @@ export function App() {
             />
           ) : null}
           {route === "relay" ? (
-            enterpriseAuth.snapshot?.enabled ? <EnterpriseAccount auth={enterpriseAuth} /> : <RelayScreen
+            enterpriseCompany ? <EnterpriseAccount auth={enterpriseAuth} /> : <RelayScreen
               settings={settings}
               relayFiles={relayFiles}
               envConflicts={envConflicts}

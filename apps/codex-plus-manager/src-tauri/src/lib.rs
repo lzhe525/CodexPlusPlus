@@ -73,6 +73,8 @@ pub fn run() {
             commands::enterprise_login,
             commands::enterprise_refresh,
             commands::enterprise_logout,
+            commands::enterprise_use_official_login,
+            commands::enterprise_use_company_login,
             commands::enterprise_diagnostics,
             commands::dream_skin_status,
             commands::import_dream_skin_image,
