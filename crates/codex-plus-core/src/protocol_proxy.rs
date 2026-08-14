@@ -552,7 +552,17 @@ async fn open_enterprise_responses_proxy_request(
     validate_upstream(&relay)?;
     let (endpoint, upstream_body, wire_api) =
         upstream_request_parts(&relay, request_json, request_path).await?;
-    let upstream = send_upstream_request_for_responses(
+    let _ = crate::diagnostic_log::append_diagnostic_log(
+        "protocol_proxy.enterprise_upstream_request",
+        json!({
+            "endpoint": endpoint,
+            "stream": is_stream,
+            "wireApi": wire_api,
+            "relayId": relay.id,
+            "relayName": relay.name
+        }),
+    );
+    let upstream = match send_upstream_request_for_responses(
         upstream_request_builder(
             crate::http_client::proxied_client(&effective_user_agent(
                 &relay.user_agent,
@@ -565,8 +575,36 @@ async fn open_enterprise_responses_proxy_request(
         ),
         is_stream,
     )
-    .await?;
+    .await
+    {
+        Ok(response) => response,
+        Err(error) => {
+            let _ = crate::diagnostic_log::append_diagnostic_log(
+                "protocol_proxy.enterprise_upstream_failed",
+                json!({
+                    "endpoint": endpoint,
+                    "stream": is_stream,
+                    "wireApi": wire_api,
+                    "relayId": relay.id,
+                    "relayName": relay.name,
+                    "error": format!("{error:#}")
+                }),
+            );
+            return Err(error);
+        }
+    };
     let status_code = upstream.status().as_u16();
+    let _ = crate::diagnostic_log::append_diagnostic_log(
+        "protocol_proxy.enterprise_upstream_response",
+        json!({
+            "endpoint": endpoint,
+            "stream": is_stream,
+            "wireApi": wire_api,
+            "relayId": relay.id,
+            "relayName": relay.name,
+            "statusCode": status_code
+        }),
+    );
     let content_type = upstream
         .headers()
         .get(reqwest::header::CONTENT_TYPE)

@@ -149,6 +149,9 @@ fn manager_launch_button_spawns_silent_launcher_binary() {
     assert!(commands_rs.contains("SILENT_BINARY"));
     assert!(commands_rs.contains("std::process::Command::new"));
     assert!(!commands_rs.contains("launch_and_inject_with_hooks(options"));
+    assert!(commands_rs.contains("LOGIN_METHOD_COMPANY"));
+    assert!(commands_rs.contains("stop_launcher_processes_and_wait"));
+    assert!(commands_rs.contains("stop_codex_processes_for_debug_port_and_wait"));
 }
 
 #[test]

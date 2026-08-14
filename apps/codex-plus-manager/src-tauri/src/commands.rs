@@ -631,6 +631,13 @@ pub async fn load_overview() -> CommandResult<OverviewPayload> {
 
 #[tauri::command]
 pub fn launch_codex_plus(request: LaunchRequest) -> CommandResult<Value> {
+    if codex_plus_core::enterprise::enterprise_mode_enabled()
+        && codex_plus_core::enterprise::current_login_method()
+            == codex_plus_core::enterprise::LOGIN_METHOD_COMPANY
+    {
+        codex_plus_core::watcher::stop_launcher_processes_and_wait();
+        codex_plus_core::watcher::stop_codex_processes_for_debug_port_and_wait(request.debug_port);
+    }
     spawn_codex_plus_launch(request, "启动任务已在后台开始，可稍后查看概览状态。")
 }
 
