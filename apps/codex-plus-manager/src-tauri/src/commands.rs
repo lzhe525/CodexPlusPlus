@@ -30,6 +30,20 @@ where
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnterpriseCommandResult<T>
+where
+    T: Serialize,
+{
+    pub outcome: String,
+    pub message: String,
+    pub code: Option<String>,
+    pub retryable: bool,
+    #[serde(flatten)]
+    pub payload: T,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct VersionPayload {
     pub version: String,
 }
@@ -68,8 +82,8 @@ pub struct EnterpriseLoginRequest {
 }
 
 #[tauri::command]
-pub async fn enterprise_restore() -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot>
-{
+pub async fn enterprise_restore()
+-> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
     enterprise_snapshot_result(
         codex_plus_core::enterprise::restore(&enterprise_credential_helper_path()).await,
     )
@@ -78,37 +92,56 @@ pub async fn enterprise_restore() -> CommandResult<codex_plus_core::enterprise::
 #[tauri::command]
 pub async fn enterprise_login(
     request: EnterpriseLoginRequest,
-) -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+) -> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
     let executable = enterprise_credential_helper_path();
-    let result = enterprise_snapshot_result(
-        codex_plus_core::enterprise::login(&request.email, &request.password, &executable).await,
-    );
+    let result =
+        codex_plus_core::enterprise::login(&request.email, &request.password, &executable).await;
     drop(request);
-    result
+    enterprise_snapshot_result(result)
 }
 
 #[tauri::command]
-pub async fn enterprise_refresh() -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot>
-{
+pub async fn enterprise_refresh()
+-> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
     enterprise_snapshot_result(
         codex_plus_core::enterprise::refresh(&enterprise_credential_helper_path()).await,
     )
 }
 
 #[tauri::command]
-pub async fn enterprise_logout() -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+pub async fn enterprise_reload()
+-> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+    enterprise_snapshot_result(codex_plus_core::enterprise::reload().await)
+}
+
+#[tauri::command]
+pub async fn enterprise_set_default_model(
+    model: String,
+) -> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+    enterprise_snapshot_result(
+        codex_plus_core::enterprise::set_default_model(
+            &model,
+            &enterprise_credential_helper_path(),
+        )
+        .await,
+    )
+}
+
+#[tauri::command]
+pub async fn enterprise_logout()
+-> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
     enterprise_snapshot_result(codex_plus_core::enterprise::logout().await)
 }
 
 #[tauri::command]
 pub async fn enterprise_use_official_login()
--> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+-> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
     enterprise_snapshot_result(codex_plus_core::enterprise::use_official_login().await)
 }
 
 #[tauri::command]
 pub async fn enterprise_use_company_login()
--> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+-> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
     enterprise_snapshot_result(codex_plus_core::enterprise::use_company_login().await)
 }
 
@@ -124,28 +157,35 @@ pub async fn enterprise_diagnostics()
 
 fn enterprise_snapshot_result(
     result: anyhow::Result<codex_plus_core::enterprise::EnterpriseSnapshot>,
-) -> CommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
+) -> EnterpriseCommandResult<codex_plus_core::enterprise::EnterpriseSnapshot> {
     match result {
-        Ok(snapshot) => CommandResult {
-            status: "ok".to_string(),
+        Ok(snapshot) => EnterpriseCommandResult {
+            outcome: "ok".to_string(),
             message: snapshot.message.clone(),
+            code: None,
+            retryable: false,
             payload: snapshot,
         },
-        Err(error) => CommandResult {
-            status: "failed".to_string(),
-            message: error.to_string(),
-            payload: codex_plus_core::enterprise::EnterpriseSnapshot {
-                enabled: codex_plus_core::enterprise::enterprise_mode_enabled(),
-                state: "error".to_string(),
-                user: None,
-                status: None,
-                profile: None,
-                credential_available: false,
-                config_managed: false,
-                login_method: codex_plus_core::enterprise::current_login_method(),
+        Err(error) => {
+            let failure = codex_plus_core::enterprise::enterprise_failure(&error);
+            EnterpriseCommandResult {
+                outcome: "failed".to_string(),
                 message: error.to_string(),
-            },
-        },
+                code: Some(failure.code),
+                retryable: failure.retryable,
+                payload: codex_plus_core::enterprise::EnterpriseSnapshot {
+                    enabled: codex_plus_core::enterprise::enterprise_mode_enabled(),
+                    state: "error".to_string(),
+                    user: None,
+                    status: None,
+                    profile: None,
+                    credential_available: false,
+                    config_managed: false,
+                    login_method: codex_plus_core::enterprise::current_login_method(),
+                    message: error.to_string(),
+                },
+            }
+        }
     }
 }
 
@@ -631,13 +671,6 @@ pub async fn load_overview() -> CommandResult<OverviewPayload> {
 
 #[tauri::command]
 pub fn launch_codex_plus(request: LaunchRequest) -> CommandResult<Value> {
-    if codex_plus_core::enterprise::enterprise_mode_enabled()
-        && codex_plus_core::enterprise::current_login_method()
-            == codex_plus_core::enterprise::LOGIN_METHOD_COMPANY
-    {
-        codex_plus_core::watcher::stop_launcher_processes_and_wait();
-        codex_plus_core::watcher::stop_codex_processes_for_debug_port_and_wait(request.debug_port);
-    }
     spawn_codex_plus_launch(request, "启动任务已在后台开始，可稍后查看概览状态。")
 }
 
@@ -4854,6 +4887,30 @@ mod tests {
         CODEX_HOME_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    #[test]
+    fn enterprise_command_outcome_does_not_collide_with_snapshot_status() {
+        let result = EnterpriseCommandResult {
+            outcome: "ok".to_string(),
+            message: "connected".to_string(),
+            code: None,
+            retryable: false,
+            payload: codex_plus_core::enterprise::EnterpriseSnapshot {
+                enabled: true,
+                state: "authenticated".to_string(),
+                user: None,
+                status: None,
+                profile: None,
+                credential_available: true,
+                config_managed: true,
+                login_method: "company".to_string(),
+                message: "connected".to_string(),
+            },
+        };
+        let value = serde_json::to_value(result).unwrap();
+        assert_eq!(value["outcome"], "ok");
+        assert!(value["status"].is_null());
     }
 
     #[test]

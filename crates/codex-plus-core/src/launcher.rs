@@ -340,11 +340,7 @@ where
             }
         }
         let protocol_proxy_enabled = relay_protocol_proxy_enabled(&settings)
-            || remote_control_provider_proxy_enabled(&settings)
-            || crate::enterprise::enterprise_proxy_profile()
-                .ok()
-                .flatten()
-                .is_some();
+            || remote_control_provider_proxy_enabled(&settings);
         if protocol_proxy_enabled {
             helper_port = crate::protocol_proxy::DEFAULT_PROTOCOL_PROXY_PORT;
         }

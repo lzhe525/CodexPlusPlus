@@ -70,6 +70,7 @@ import {
 } from "lucide-react";
 import { ProviderPresetSelector } from "@/components/ProviderPresetSelector";
 import type { PresetPatch } from "@/components/ProviderPresetSelector";
+import { WindowChrome } from "@/components/WindowChrome";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { Badge as UiBadge } from "@/components/ui/badge";
@@ -2807,21 +2808,27 @@ export function App() {
   const hasUpdate = update?.updateAvailable === true;
   const enterpriseOfficial = isEnterpriseOfficialLogin(enterpriseAuth.snapshot);
   const enterpriseCompany = isEnterpriseCompanyAuthenticated(enterpriseAuth.snapshot);
-  const enterpriseEdition = enterpriseAuth.snapshot?.enabled === true;
+  const enterpriseEdition = enterpriseAuth.snapshot?.enabled ?? enterpriseAuth.enterpriseEnabled;
   const visibleRoutes = (enterpriseCompany
-    ? communityRoutes.map((item) => item.id === "relay" ? { ...item, label: "Company Account", icon: ShieldCheck } : item)
+    ? communityRoutes.map((item) => item.id === "relay" ? { ...item, label: "Azalea Plugin for Codex", icon: ShieldCheck } : item)
     : communityRoutes
   ).filter((item) => !enterpriseEdition || !["zedRemote", "recommendations"].includes(item.id));
 
+  useEffect(() => {
+    if (route === "relay" && enterpriseCompany) void enterpriseAuth.refreshIfStale();
+  }, [enterpriseAuth.refreshIfStale, enterpriseCompany, route]);
+
   if (enterpriseAuth.busy && enterpriseAuth.snapshot === null) {
-    return <div className={`shell ${theme}`}><div className="enterprise-gate"><div className="enterprise-login-card"><h1>Company Codex</h1><p>正在检查企业会话…</p></div></div></div>;
+    return <div className={`shell ${theme}`}><WindowChrome title="Azalea Plugin for Codex" /><div className="enterprise-gate"><div className="enterprise-login-card enterprise-loading-card"><h1>Azalea Plugin for Codex</h1><p>正在检查企业会话…</p></div></div></div>;
   }
-  if (enterpriseAuth.snapshot?.enabled && !enterpriseCompany && !enterpriseOfficial) {
-    return <div className={`shell ${theme}`}><EnterpriseLogin auth={enterpriseAuth} /></div>;
+  if (enterpriseEdition && !enterpriseCompany && !enterpriseOfficial) {
+    return <div className={`shell ${theme}`}><WindowChrome title="Azalea Plugin for Codex" /><EnterpriseLogin auth={enterpriseAuth} /></div>;
   }
 
   return (
     <div className={`shell ${theme}`}>
+      <WindowChrome title={enterpriseEdition ? "Azalea Plugin for Codex" : "Codex++ Manager"} />
+      <div className="shell-content">
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-copy">
@@ -2875,7 +2882,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar" key={`topbar-${route}`}>
           <div>
-            <h1>{enterpriseCompany && route === "relay" ? "Company Account" : routeTitle(route)}</h1>
+            <h1>{enterpriseCompany && route === "relay" ? "Azalea Plugin for Codex" : routeTitle(route)}</h1>
             <p>{enterpriseCompany && route === "relay" ? "企业身份、授权模型、用量与连接诊断" : enterpriseOfficial && route === "relay" ? t("当前使用原账号登录；供应商配置与官方 ChatGPT 登录途径已恢复。") : routeSubtitle(route)}</p>
           </div>
           <div className="topbar-actions">
@@ -3117,6 +3124,7 @@ export function App() {
           onDismiss={() => void dismissPendingDreamSkinCommunity()}
         />
       ) : null}
+      </div>
     </div>
   );
 }

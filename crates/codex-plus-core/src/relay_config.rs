@@ -1122,7 +1122,7 @@ fn remove_disabled_context_tables(table: &mut toml_edit::Table) {
     }
 }
 
-fn write_codex_live_atomic(
+pub(crate) fn write_codex_live_atomic(
     home: &Path,
     config_text: Option<&str>,
     auth_bytes: Option<&[u8]>,

@@ -53,6 +53,10 @@ pub fn run() {
                     .title("Codex++ 管理工具")
                     .inner_size(1180.0, 820.0)
                     .min_inner_size(960.0, 720.0);
+            #[cfg(target_os = "windows")]
+            {
+                main_window_builder = main_window_builder.decorations(false).shadow(true);
+            }
             if let Some(icon) = app.default_window_icon().cloned() {
                 main_window_builder = main_window_builder.icon(icon)?;
             }
@@ -72,6 +76,8 @@ pub fn run() {
             commands::enterprise_restore,
             commands::enterprise_login,
             commands::enterprise_refresh,
+            commands::enterprise_reload,
+            commands::enterprise_set_default_model,
             commands::enterprise_logout,
             commands::enterprise_use_official_login,
             commands::enterprise_use_company_login,
@@ -166,12 +172,12 @@ pub fn run() {
         ])
         .build(tauri::generate_context!());
     match app_result {
-        Ok(app) => app.run(|app_handle, event| {
+        Ok(app) => app.run(|_app_handle, _event| {
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Opened { urls } = event {
+            if let tauri::RunEvent::Opened { urls } = _event {
                 for url in urls {
                     if handle_dream_skin_url(url.as_str()) {
-                        show_main_window(app_handle);
+                        show_main_window(_app_handle);
                     }
                 }
             }

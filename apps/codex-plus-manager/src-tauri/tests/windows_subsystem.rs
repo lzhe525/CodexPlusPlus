@@ -149,13 +149,44 @@ fn manager_launch_button_spawns_silent_launcher_binary() {
     assert!(commands_rs.contains("SILENT_BINARY"));
     assert!(commands_rs.contains("std::process::Command::new"));
     assert!(!commands_rs.contains("launch_and_inject_with_hooks(options"));
-    assert!(commands_rs.contains("LOGIN_METHOD_COMPANY"));
-    assert!(commands_rs.contains("stop_launcher_processes_and_wait"));
-    assert!(commands_rs.contains("stop_codex_processes_for_debug_port_and_wait"));
+    let launch = commands_rs
+        .split("pub fn launch_codex_plus")
+        .nth(1)
+        .and_then(|source| source.split("pub fn restart_codex_plus").next())
+        .expect("launch command source");
+    assert!(!launch.contains("LOGIN_METHOD_COMPANY"));
+    assert!(!launch.contains("stop_launcher_processes_and_wait"));
+    assert!(!launch.contains("stop_codex_processes_for_debug_port_and_wait"));
 }
 
 #[test]
-fn launcher_repairs_enterprise_authentication_before_starting_codex() {
+fn windows_packages_include_non_elevated_enterprise_credential_helper() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir
+        .parent()
+        .and_then(std::path::Path::parent)
+        .and_then(std::path::Path::parent)
+        .unwrap();
+    let pr_workflow = std::fs::read_to_string(root.join(".github/workflows/pr-build.yml")).unwrap();
+    let release_workflow =
+        std::fs::read_to_string(root.join(".github/workflows/release-assets.yml")).unwrap();
+    let installer =
+        std::fs::read_to_string(root.join("scripts/installer/windows/CodexPlusPlus.nsi")).unwrap();
+    let helper_dir = root.join("apps/codex-plus-image-mcp");
+
+    assert!(pr_workflow.contains("target/release/codex-plus-image-mcp.exe"));
+    assert!(release_workflow.contains("target/release/codex-plus-image-mcp.exe"));
+    assert!(installer.contains("File \"${ROOT}\\dist\\windows\\app\\codex-plus-image-mcp.exe\""));
+    assert!(installer.contains("Delete \"$INSTDIR\\codex-plus-image-mcp.exe\""));
+    assert!(installer.contains("taskkill /IM codex-plus-image-mcp.exe /F"));
+    assert!(
+        !helper_dir.join("build.rs").exists(),
+        "credential helper must not inherit the elevated launcher manifest"
+    );
+}
+
+#[test]
+fn launcher_does_not_gate_codex_startup_on_enterprise_authentication() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let launcher_main = manifest_dir
         .parent()
@@ -164,17 +195,20 @@ fn launcher_repairs_enterprise_authentication_before_starting_codex() {
         .join("codex-plus-launcher/src/main.rs");
     let launcher_main = std::fs::read_to_string(launcher_main).expect("read launcher main.rs");
 
-    let prepare = launcher_main
-        .find("prepare_enterprise_launch().await?")
-        .expect("launcher should prepare enterprise authentication");
-    let launch = launcher_main
-        .find("launch_and_inject_with_hooks(options, &hooks).await?")
-        .expect("launcher should start Codex");
-    assert!(prepare < launch);
-    assert!(launcher_main.contains("codex_plus_core::enterprise::restore(&executable)"));
-    assert!(launcher_main.contains("snapshot.state == \"authenticated\""));
-    assert!(launcher_main.contains("snapshot.credential_available"));
-    assert!(launcher_main.contains("snapshot.config_managed"));
+    assert!(launcher_main.contains("launch_and_inject_with_hooks(options, &hooks).await?"));
+    assert!(!launcher_main.contains("prepare_enterprise_launch"));
+    assert!(!launcher_main.contains("codex_plus_core::enterprise::restore"));
+}
+
+#[test]
+fn enterprise_login_only_configures_credentials() {
+    let commands_rs =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/commands.rs"))
+            .expect("read manager commands.rs");
+
+    assert!(commands_rs.contains("codex_plus_core::enterprise::login"));
+    assert!(!commands_rs.contains("restart_codex_after_enterprise_auth"));
+    assert!(!commands_rs.contains("manager.enterprise_authenticated_launch"));
 }
 
 #[test]
