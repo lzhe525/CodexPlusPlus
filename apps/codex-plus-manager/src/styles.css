@@ -263,11 +263,19 @@ body {
   display: grid;
   gap: 4px;
   margin-top: 12px;
+  flex: 0 0 auto;
+}
+
+.sidebar-scroll-region {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-  padding-right: 2px;
+  padding: 0 2px 12px 0;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .nav-item {
@@ -285,6 +293,7 @@ body {
   cursor: pointer;
   min-height: 38px;
   padding: 0 9px;
+  scroll-margin-block: 8px;
   text-align: left;
   transition:
     background-color 140ms ease,
@@ -4036,7 +4045,6 @@ select {
   gap: 2px;
   max-height: none;
   margin-top: 4px;
-  padding-right: 3px;
 }
 
 .nav-item {
@@ -5931,7 +5939,7 @@ select {
 .window-chrome-controls button:focus-visible,
 .enterprise-login-card button:focus-visible,
 .enterprise-login-card input:focus-visible,
-.enterprise-model-control select:focus-visible,
+.enterprise-model-trigger:focus-visible,
 .enterprise-model-control button:focus-visible,
 .enterprise-actions button:focus-visible,
 .enterprise-login-method:focus-visible {
@@ -6295,21 +6303,46 @@ select {
   gap: 8px;
 }
 
-.enterprise-model-control select,
-.enterprise-model-control button {
+.enterprise-model-trigger,
+.enterprise-model-save {
   min-height: 40px;
   border: 1px solid hsl(var(--input));
   border-radius: 8px;
-  background: hsl(var(--surface-sunken));
   color: hsl(var(--foreground));
 }
 
-.enterprise-model-control select {
+.enterprise-model-select {
   min-width: 0;
-  padding: 0 11px;
 }
 
-.enterprise-model-control button {
+.enterprise-model-trigger {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  background: hsl(var(--surface-sunken));
+  padding: 8px 11px;
+  text-align: left;
+}
+
+.enterprise-model-trigger > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.enterprise-model-trigger svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.enterprise-model-trigger svg.open {
+  transform: rotate(180deg);
+}
+
+.enterprise-model-save {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -6319,9 +6352,55 @@ select {
   font-weight: 700;
 }
 
-.enterprise-model-control button svg {
+.enterprise-model-save svg {
   width: 15px;
   height: 15px;
+}
+
+.enterprise-model-menu {
+  position: fixed;
+  z-index: 100;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  box-shadow: 0 14px 36px hsl(0 0% 0% / 0.28);
+  padding: 5px;
+  overscroll-behavior: contain;
+}
+
+.enterprise-model-option {
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.enterprise-model-option > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.enterprise-model-option svg {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--brand-accent));
+}
+
+.enterprise-model-option.active {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.enterprise-model-option[aria-selected="true"] {
+  font-weight: 650;
 }
 
 .enterprise-model-control button:disabled,
@@ -6408,6 +6487,25 @@ select {
 }
 
 @media (max-height: 680px) {
+  .sidebar {
+    padding-top: 10px;
+  }
+
+  .brand {
+    min-height: auto;
+    padding-bottom: 10px;
+  }
+
+  .enterprise-method-picker.compact {
+    gap: 8px;
+    margin-top: 4px;
+    padding: 8px;
+  }
+
+  .enterprise-method-picker.compact .enterprise-login-method {
+    min-height: 56px;
+  }
+
   .enterprise-gate {
     align-items: flex-start;
     padding-block: 18px;

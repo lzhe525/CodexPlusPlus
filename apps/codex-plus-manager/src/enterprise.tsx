@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { CheckCircle2, CircleX, KeyRound, LogOut, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { EnterpriseModelSelect } from "@/components/EnterpriseModelSelect";
 import { shouldPreserveAuthenticatedSnapshot } from "@/enterprise-state";
 import { t } from "@/i18n";
 
@@ -372,18 +373,17 @@ export function EnterpriseAccount({ auth }: { auth: ReturnType<typeof useEnterpr
         <article className="enterprise-model-metric">
           <span>默认模型</span>
           <div className="enterprise-model-control">
-            <select
-              aria-label="默认模型"
+            <EnterpriseModelSelect
               disabled={auth.busy || allowedModels.length === 0}
-              onChange={(event) => {
-                setSelectedModel(event.currentTarget.value);
+              onChange={(model) => {
+                setSelectedModel(model);
                 setSaveMessage("");
               }}
+              options={allowedModels}
               value={selectedModel}
-            >
-              {allowedModels.map((model) => <option key={model} value={model}>{model}</option>)}
-            </select>
+            />
             <button
+              className="enterprise-model-save"
               disabled={auth.busy || !selectedModel || selectedModel === snapshot.profile?.defaultModel}
               onClick={() => void saveDefaultModel()}
               type="button"

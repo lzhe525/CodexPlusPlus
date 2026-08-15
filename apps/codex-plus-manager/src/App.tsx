@@ -2851,33 +2851,35 @@ export function App() {
             <div className="brand-subtitle">{t("管理控制台")}</div>
           </div>
         </div>
-        {enterpriseAuth.snapshot?.enabled ? (
-          <EnterpriseLoginMethodPicker
-            active={enterpriseOfficial ? "official" : "company"}
-            auth={enterpriseAuth}
-            compact
-          />
-        ) : null}
-        <nav className="nav">
-          {visibleRoutes.map((item) => {
-            const Icon = item.icon;
-            return (
-            <button
-              className={`nav-item ${route === item.id ? "active" : ""}`}
-              key={item.id}
-              onClick={() => void navigate(item.id)}
-              title={item.label}
-              type="button"
-            >
-              <span className="nav-icon">
-                <Icon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="nav-label">{item.label}</span>
-              {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
-            </button>
-          );
-          })}
-        </nav>
+        <div className="sidebar-scroll-region">
+          {enterpriseAuth.snapshot?.enabled ? (
+            <EnterpriseLoginMethodPicker
+              active={enterpriseOfficial ? "official" : "company"}
+              auth={enterpriseAuth}
+              compact
+            />
+          ) : null}
+          <nav className="nav">
+            {visibleRoutes.map((item) => {
+              const Icon = item.icon;
+              return (
+              <button
+                className={`nav-item ${route === item.id ? "active" : ""}`}
+                key={item.id}
+                onClick={() => void navigate(item.id)}
+                title={item.label}
+                type="button"
+              >
+                <span className="nav-icon">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="nav-label">{item.label}</span>
+                {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
+              </button>
+            );
+            })}
+          </nav>
+        </div>
       </aside>
       <main className="workspace">
         <header className="topbar" key={`topbar-${route}`}>

@@ -4,6 +4,7 @@ import test from "node:test";
 import { shouldPreserveAuthenticatedSnapshot } from "./enterprise-state.ts";
 
 const enterprise = readFileSync(new URL("./enterprise.tsx", import.meta.url), "utf8");
+const enterpriseModelSelect = readFileSync(new URL("./components/EnterpriseModelSelect.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
 const chrome = readFileSync(new URL("./components/WindowChrome.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
@@ -26,6 +27,16 @@ test("enterprise refresh and model commands remain distinct", () => {
   assert.match(enterprise, /ENTERPRISE_REFRESH_MAX_AGE_MS = 60_000/);
   assert.match(enterprise, /clearSnapshot: true/);
   assert.match(enterprise, /shouldPreserveAuthenticatedSnapshot/);
+});
+
+test("sidebar and enterprise model selection avoid clipped native controls", () => {
+  assert.match(app, /className="sidebar-scroll-region"/);
+  assert.match(styles, /\.sidebar-scroll-region\s*\{[^}]*overflow-y:\s*auto/s);
+  assert.doesNotMatch(enterprise, /<select/);
+  assert.match(enterprise, /<EnterpriseModelSelect/);
+  assert.match(enterpriseModelSelect, /createPortal/);
+  assert.match(enterpriseModelSelect, /role="listbox"/);
+  assert.match(enterpriseModelSelect, /role="option"/);
 });
 
 test("authenticated snapshot is preserved only for explicitly retryable failures", () => {
